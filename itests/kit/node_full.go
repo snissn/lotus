@@ -3,6 +3,8 @@ package kit
 import (
 	"context"
 	"fmt"
+	libp2pcrypto "github.com/libp2p/go-libp2p/core/crypto"
+	"github.com/libp2p/go-libp2p/core/peer"
 	"testing"
 	"time"
 
@@ -18,6 +20,11 @@ import (
 	"github.com/filecoin-project/lotus/chain/wallet/key"
 )
 
+type Libp2p struct {
+	PeerID  peer.ID
+	PrivKey libp2pcrypto.PrivKey
+}
+
 // TestFullNode represents a full node enrolled in an Ensemble.
 type TestFullNode struct {
 	v1api.FullNode
@@ -28,6 +35,12 @@ type TestFullNode struct {
 	// API server is created for this Node.
 	ListenAddr multiaddr.Multiaddr
 	DefaultKey *key.Key
+
+	//Libp2p struct {
+	//	PeerID  peer.ID
+	//	PrivKey libp2pcrypto.PrivKey
+	//}
+	pkey *Libp2p
 
 	options nodeOpts
 }
@@ -84,6 +97,10 @@ func (f *TestFullNode) WaitForSectorActive(ctx context.Context, t *testing.T, sn
 
 		time.Sleep(time.Second)
 	}
+}
+
+func (t *TestFullNode) AssignPrivKey(pkey *Libp2p) {
+	t.pkey = pkey
 }
 
 // ChainPredicate encapsulates a chain condition.

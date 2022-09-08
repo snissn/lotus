@@ -3,7 +3,7 @@ package full
 import (
 	"context"
 	"encoding/json"
-
+	"github.com/filecoin-project/lotus/chain/messagesigner"
 	"github.com/ipfs/go-cid"
 	"go.uber.org/fx"
 	"golang.org/x/xerrors"
@@ -13,7 +13,6 @@ import (
 
 	"github.com/filecoin-project/lotus/api"
 	"github.com/filecoin-project/lotus/chain/messagepool"
-	"github.com/filecoin-project/lotus/chain/messagesigner"
 	"github.com/filecoin-project/lotus/chain/types"
 	"github.com/filecoin-project/lotus/node/modules/dtypes"
 )
@@ -41,9 +40,11 @@ type MpoolAPI struct {
 	MpoolModuleAPI
 
 	WalletAPI
+
 	GasAPI
 
-	MessageSigner *messagesigner.MessageSigner
+	MessageSigner messagesigner.MsgSigner
+	//	MessageSigner *messagesigner.MessageSigner
 
 	PushLocks *dtypes.MpoolLocker
 }
@@ -142,6 +143,20 @@ func (a *MpoolAPI) MpoolPushMessage(ctx context.Context, msg *types.Message, spe
 	msg = &cp
 	inMsg := *msg
 
+	// Redirect to leader if current node is not leader. A single non raft based node is always the leader
+	if !a.MessageSigner.IsLeader(ctx) {
+		var signedMsg types.SignedMessage
+		redirected, err := a.MessageSigner.RedirectToLeader(ctx, "MpoolPushMessage", api.MpoolMessageWhole{msg, spec}, &signedMsg)
+		if err != nil {
+			return nil, err
+		}
+		// It's possible that the current node became the leader between the check and the redirect
+		// In that case, continue with rest of execution and only return signedMsg if something was redirected
+		if redirected {
+			return &signedMsg, nil
+		}
+	}
+
 	// Check if this uuid has already been processed
 	if spec != nil {
 		signedMessage, err := a.MessageSigner.GetSignedMessage(ctx, spec.MsgUuid)
@@ -195,7 +210,7 @@ func (a *MpoolAPI) MpoolPushMessage(ctx context.Context, msg *types.Message, spe
 	}
 
 	// Sign and push the message
-	signedMsg, err := a.MessageSigner.SignMessage(ctx, msg, func(smsg *types.SignedMessage) error {
+	signedMsg, err := a.MessageSigner.SignMessage(ctx, msg, spec, func(smsg *types.SignedMessage) error {
 		if _, err := a.MpoolModuleAPI.MpoolPush(ctx, smsg); err != nil {
 			return xerrors.Errorf("mpool push: failed to push message: %w", err)
 		}

@@ -6,6 +6,7 @@ import (
 	"crypto/rand"
 	"encoding/binary"
 	"fmt"
+	"github.com/google/uuid"
 	"io/ioutil"
 	"net"
 	"net/http"
@@ -176,6 +177,16 @@ func (n *Ensemble) Mocknet() mocknet.Mocknet {
 	return n.mn
 }
 
+func (n *Ensemble) NewPrivKey() (libp2pcrypto.PrivKey, peer.ID) {
+	privkey, _, err := libp2pcrypto.GenerateEd25519Key(rand.Reader)
+	require.NoError(n.t, err)
+
+	peerId, err := peer.IDFromPrivateKey(privkey)
+	require.NoError(n.t, err)
+
+	return privkey, peerId
+}
+
 // FullNode enrolls a new full node.
 func (n *Ensemble) FullNode(full *TestFullNode, opts ...NodeOpt) *Ensemble {
 	options := DefaultNodeOpts
@@ -201,13 +212,14 @@ func (n *Ensemble) FullNode(full *TestFullNode, opts ...NodeOpt) *Ensemble {
 	}
 
 	*full = TestFullNode{t: n.t, options: options, DefaultKey: key}
+
 	n.inactive.fullnodes = append(n.inactive.fullnodes, full)
 	return n
 }
 
 // Miner enrolls a new miner, using the provided full node for chain
 // interactions.
-func (n *Ensemble) Miner(minerNode *TestMiner, full *TestFullNode, opts ...NodeOpt) *Ensemble {
+func (n *Ensemble) MinerEnroll(minerNode *TestMiner, full *TestFullNode, opts ...NodeOpt) *Ensemble {
 	require.NotNil(n.t, full, "full node required when instantiating miner")
 
 	options := DefaultNodeOpts
@@ -292,8 +304,18 @@ func (n *Ensemble) Miner(minerNode *TestMiner, full *TestFullNode, opts ...NodeO
 	minerNode.Libp2p.PeerID = peerId
 	minerNode.Libp2p.PrivKey = privkey
 
-	n.inactive.miners = append(n.inactive.miners, minerNode)
+	//n.inactive.miners = append(n.inactive.miners, minerNode)
 
+	return n
+}
+
+func (n *Ensemble) AddInactiveMiner(m *TestMiner) {
+	n.inactive.miners = append(n.inactive.miners, m)
+}
+
+func (n *Ensemble) Miner(minerNode *TestMiner, full *TestFullNode, opts ...NodeOpt) *Ensemble {
+	n.MinerEnroll(minerNode, full, opts...)
+	n.AddInactiveMiner(minerNode)
 	return n
 }
 
@@ -358,6 +380,21 @@ func (n *Ensemble) Start() *Ensemble {
 		// setup config with options
 		lr, err := r.Lock(repo.FullNode)
 		require.NoError(n.t, err)
+
+		ks, err := lr.KeyStore()
+		require.NoError(n.t, err)
+
+		if full.pkey != nil {
+			pk, err := libp2pcrypto.MarshalPrivateKey(full.pkey.PrivKey)
+			require.NoError(n.t, err)
+
+			err = ks.Put("libp2p-host", types.KeyInfo{
+				Type:       "libp2p-host",
+				PrivateKey: pk,
+			})
+			require.NoError(n.t, err)
+
+		}
 
 		c, err := lr.Config()
 		require.NoError(n.t, err)
@@ -478,7 +515,9 @@ func (n *Ensemble) Start() *Ensemble {
 					Method: power.Methods.CreateMiner,
 					Params: params,
 				}
-				signed, err := m.FullNode.FullNode.MpoolPushMessage(ctx, createStorageMinerMsg, nil)
+				signed, err := m.FullNode.FullNode.MpoolPushMessage(ctx, createStorageMinerMsg, &api.MessageSendSpec{
+					MsgUuid: uuid.New(),
+				})
 				require.NoError(n.t, err)
 
 				mw, err := m.FullNode.FullNode.StateWaitMsg(ctx, signed.Cid(), build.MessageConfidence, api.LookbackNoLimit, true)
@@ -502,7 +541,9 @@ func (n *Ensemble) Start() *Ensemble {
 					Value:  types.NewInt(0),
 				}
 
-				signed, err2 := m.FullNode.FullNode.MpoolPushMessage(ctx, msg, nil)
+				signed, err2 := m.FullNode.FullNode.MpoolPushMessage(ctx, msg, &api.MessageSendSpec{
+					MsgUuid: uuid.New(),
+				})
 				require.NoError(n.t, err2)
 
 				mw, err2 := m.FullNode.FullNode.StateWaitMsg(ctx, signed.Cid(), build.MessageConfidence, api.LookbackNoLimit, true)
@@ -612,7 +653,9 @@ func (n *Ensemble) Start() *Ensemble {
 				Value:  types.NewInt(0),
 			}
 
-			_, err2 := m.FullNode.MpoolPushMessage(ctx, msg, nil)
+			_, err2 := m.FullNode.MpoolPushMessage(ctx, msg, &api.MessageSendSpec{
+				MsgUuid: uuid.New(),
+			})
 			require.NoError(n.t, err2)
 		}
 
@@ -814,9 +857,9 @@ func (n *Ensemble) Start() *Ensemble {
 			wait.Unlock()
 		})
 		wait.Lock()
+		n.bootstrapped = true
 	}
 
-	n.bootstrapped = true
 	return n
 }
 
