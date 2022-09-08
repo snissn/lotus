@@ -6,11 +6,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
+	"time"
+
 	addr "github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/lotus/chain/types"
 	"github.com/google/uuid"
-	"sort"
-	"time"
 
 	//ds "github.com/ipfs/go-datastore"
 	logging "github.com/ipfs/go-log/v2"
@@ -39,8 +40,8 @@ type RaftState struct {
 	MsgUuids map[uuid.UUID]*types.SignedMessage
 }
 
-func newRaftState() *RaftState {
-	return &RaftState{NonceMap: make(map[addr.Address]uint64),
+func newRaftState() RaftState {
+	return RaftState{NonceMap: make(map[addr.Address]uint64),
 		MsgUuids: make(map[uuid.UUID]*types.SignedMessage)}
 }
 
@@ -80,7 +81,7 @@ type Consensus struct {
 	actor     consensus.Actor
 	//baseOp    *LogOp
 	raft  *raftWrapper
-	state *RaftState
+	state RaftState
 
 	rpcClient *rpc.Client
 	rpcReady  chan struct{}
@@ -542,11 +543,11 @@ func (cc *Consensus) State(ctx context.Context) (consensus.State, error) {
 	if err != nil {
 		return nil, err
 	}
-	state, ok := st.(*RaftState)
+	state, ok := st.(RaftState)
 	if !ok {
 		return nil, errors.New("wrong state type")
 	}
-	return *state, nil
+	return state, nil
 }
 
 // Leader returns the peerID of the Leader of the

@@ -2,6 +2,8 @@ package messagesigner
 
 import (
 	"context"
+	"reflect"
+
 	"github.com/filecoin-project/lotus/api"
 	"github.com/filecoin-project/lotus/chain/types"
 	consensus "github.com/filecoin-project/lotus/lib/consensus/raft"
@@ -10,7 +12,6 @@ import (
 	"github.com/ipfs/go-datastore"
 	"github.com/ipfs/go-datastore/namespace"
 	"golang.org/x/xerrors"
-	"reflect"
 )
 
 type MessageSignerConsensus struct {
@@ -87,7 +88,7 @@ func (ms *MessageSignerConsensus) GetSignedMessage(ctx context.Context, uuid uui
 	//et := ev.Type()
 	log.Infof("!!!!!!!!!!!!!!!!!!!!!!!STate type: %v", reflect.TypeOf(state))
 
-	cstate := state.(*consensus.RaftState)
+	cstate := state.(consensus.RaftState)
 	msg, ok := cstate.MsgUuids[uuid]
 	if !ok {
 		return nil, xerrors.Errorf("Msg with Uuid %s not available", uuid)
