@@ -2,6 +2,8 @@ package vm
 
 import (
 	"context"
+	"github.com/filecoin-project/go-state-types/abi"
+	"github.com/filecoin-project/go-state-types/crypto"
 	"os"
 
 	cid "github.com/ipfs/go-cid"
@@ -34,6 +36,9 @@ type Interface interface {
 var useFvmDebug = os.Getenv("LOTUS_FVM_DEVELOPER_DEBUG") == "1"
 
 func NewVM(ctx context.Context, opts *VMOpts) (Interface, error) {
+	// if this_is_for_adlrocha_to_run {
+	opts.Rand = veryFakeRand{}
+	// }
 	if opts.NetworkVersion >= network.Version16 {
 		if useFvmDebug {
 			return NewDualExecutionFVM(ctx, opts)
@@ -42,4 +47,15 @@ func NewVM(ctx context.Context, opts *VMOpts) (Interface, error) {
 	}
 
 	return NewLegacyVM(ctx, opts)
+}
+
+type veryFakeRand struct{}
+
+func (v veryFakeRand) GetChainRandomness(ctx context.Context, pers crypto.DomainSeparationTag, round abi.ChainEpoch, entropy []byte) ([]byte, error) {
+	return []byte("sorandomlol"), nil
+}
+
+func (v veryFakeRand) GetBeaconRandomness(ctx context.Context, pers crypto.DomainSeparationTag, round abi.ChainEpoch, entropy []byte) ([]byte, error) {
+	return []byte("sorandomlol"), nil
+
 }
