@@ -6,6 +6,8 @@ import (
 	"io"
 	"time"
 
+	"github.com/filecoin-project/specs-actors/v7/actors/migration/nv15"
+
 	"github.com/ipfs/go-cid"
 	"github.com/urfave/cli/v2"
 	cbg "github.com/whyrusleeping/cbor-gen"
@@ -23,8 +25,6 @@ import (
 	miner9 "github.com/filecoin-project/go-state-types/builtin/v9/miner"
 	adt9 "github.com/filecoin-project/go-state-types/builtin/v9/util/adt"
 	verifreg9 "github.com/filecoin-project/go-state-types/builtin/v9/verifreg"
-	"github.com/filecoin-project/specs-actors/v7/actors/migration/nv15"
-
 	"github.com/filecoin-project/lotus/blockstore"
 	"github.com/filecoin-project/lotus/chain/actors"
 	"github.com/filecoin-project/lotus/chain/actors/adt"
@@ -43,6 +43,25 @@ import (
 	"github.com/filecoin-project/lotus/node/repo"
 	"github.com/filecoin-project/lotus/storage/sealer/ffiwrapper"
 )
+
+type NotCache struct{}
+
+func (m *NotCache) Write(key string, c cid.Cid) error {
+	return nil
+}
+
+func (m *NotCache) Read(key string) (bool, cid.Cid, error) {
+	return false, cid.Undef, nil
+}
+
+func (m *NotCache) Load(key string, loadFunc func() (cid.Cid, error)) (cid.Cid, error) {
+	c, err := loadFunc()
+	if err != nil {
+		return cid.Undef, err
+	}
+
+	return c, nil
+}
 
 var migrationsCmd = &cli.Command{
 	Name:        "migrate-nv17",
@@ -119,65 +138,65 @@ var migrationsCmd = &cli.Command{
 			return err
 		}
 
-		ts1, err := cs.GetTipsetByHeight(ctx, blk.Height-240, migrationTs, false)
-		if err != nil {
-			return err
-		}
+		//ts1, err := cs.GetTipsetByHeight(ctx, blk.Height-240, migrationTs, false)
+		//if err != nil {
+		//	return err
+		//}
 
 		startTime := time.Now()
+		//
+		//err = filcns.PreUpgradeActorsV9(ctx, sm, cache, ts1.ParentState(), ts1.Height()-1, ts1)
+		//if err != nil {
+		//	return err
+		//}
+		//
+		//preMigration1Time := time.Since(startTime)
+		//
+		//ts2, err := cs.GetTipsetByHeight(ctx, blk.Height-15, migrationTs, false)
+		//if err != nil {
+		//	return err
+		//}
+		//
+		//startTime = time.Now()
+		//
+		//err = filcns.PreUpgradeActorsV9(ctx, sm, cache, ts2.ParentState(), ts2.Height()-1, ts2)
+		//if err != nil {
+		//	return err
+		//}
+		//
+		//preMigration2Time := time.Since(startTime)
+		//
+		//startTime = time.Now()
+		//
+		//newCid1, err := filcns.UpgradeActorsV9(ctx, sm, cache, nil, blk.ParentStateRoot, blk.Height-1, migrationTs)
+		//if err != nil {
+		//	return err
+		//}
+		//
+		//cachedMigrationTime := time.Since(startTime)
 
-		err = filcns.PreUpgradeActorsV9(ctx, sm, cache, ts1.ParentState(), ts1.Height()-1, ts1)
-		if err != nil {
-			return err
-		}
+		//startTime = time.Now()
 
-		preMigration1Time := time.Since(startTime)
-
-		ts2, err := cs.GetTipsetByHeight(ctx, blk.Height-15, migrationTs, false)
-		if err != nil {
-			return err
-		}
-
-		startTime = time.Now()
-
-		err = filcns.PreUpgradeActorsV9(ctx, sm, cache, ts2.ParentState(), ts2.Height()-1, ts2)
-		if err != nil {
-			return err
-		}
-
-		preMigration2Time := time.Since(startTime)
-
-		startTime = time.Now()
-
-		newCid1, err := filcns.UpgradeActorsV9(ctx, sm, cache, nil, blk.ParentStateRoot, blk.Height-1, migrationTs)
-		if err != nil {
-			return err
-		}
-
-		cachedMigrationTime := time.Since(startTime)
-
-		startTime = time.Now()
-
-		newCid2, err := filcns.UpgradeActorsV9(ctx, sm, nv15.NewMemMigrationCache(), nil, blk.ParentStateRoot, blk.Height-1, migrationTs)
+		newCid2, err := filcns.UpgradeActorsV9(ctx, sm, cache, nil, blk.ParentStateRoot, blk.Height-1, migrationTs)
 		if err != nil {
 			return err
 		}
 
 		uncachedMigrationTime := time.Since(startTime)
 
-		if newCid1 != newCid2 {
-			return xerrors.Errorf("got different results with and without the cache: %s, %s", newCid1,
-				newCid2)
-		}
+		//if newCid1 != newCid2 {
+		//	return xerrors.Errorf("got different results with and without the cache: %s, %s", newCid1,
+		//		newCid2)
+		//}
 
 		fmt.Println("new cid", newCid2)
-		fmt.Println("completed premigration 1, took ", preMigration1Time)
-		fmt.Println("completed premigration 2, took ", preMigration2Time)
-		fmt.Println("completed round actual (with cache), took ", cachedMigrationTime)
+		//fmt.Println("completed premigration 1, took ", preMigration1Time)
+		//fmt.Println("completed premigration 2, took ", preMigration2Time)
+		//fmt.Println("completed round actual (with cache), took ", cachedMigrationTime)
 		fmt.Println("completed round actual (without cache), took ", uncachedMigrationTime)
 
 		if cctx.Bool("check-invariants") {
-			err = checkMigrationInvariants(ctx, blk.ParentStateRoot, newCid1, bs, blk.Height-1)
+			err = checkMigrationInvariants(ctx, blk.ParentStateRoot, newCid2, bs, blk.Height-1)
 			if err != nil {
 				return err
 			}
@@ -253,7 +272,8 @@ func checkDatacaps(stateTreeV8 *state.StateTree, stateTreeV9 *state.StateTree, a
 		return err
 	}
 
-	if len(verifregDatacaps) != len(newDatacaps) {
+	// Should have all the v8 datacaps, plus the verifreg actor itself
+	if len(verifregDatacaps)+1 != len(newDatacaps) {
 		return xerrors.Errorf("size of datacap maps do not match. verifreg: %d, datacap: %d", len(verifregDatacaps), len(newDatacaps))
 	}
 
@@ -342,6 +362,12 @@ func checkPendingVerifiedDeals(stateTreeV8 *state.StateTree, stateTreeV9 *state.
 		return xerrors.Errorf("failed to get proposals: %w", err)
 	}
 
+	// We only want those pending deals that haven't been activated -- an activated deal has an entry in dealStates8
+	dealStates8, err := adt9.AsArray(actorStore, marketStateV8.States, market8.StatesAmtBitwidth)
+	if err != nil {
+		return xerrors.Errorf("failed to load v8 states array: %w", err)
+	}
+
 	var numPendingVerifiedDeals = 0
 	var proposal market8.DealProposal
 	err = dealProposalsV8.ForEach(&proposal, func(dealID int64) error {
@@ -362,6 +388,17 @@ func checkPendingVerifiedDeals(stateTreeV8 *state.StateTree, stateTreeV9 *state.
 
 		// Nothing to do for not-pending deals
 		if !isPending {
+			return nil
+		}
+
+		var _dealState8 market8.DealState
+		found, err := dealStates8.Get(uint64(dealID), &_dealState8)
+		if err != nil {
+			return xerrors.Errorf("failed to lookup deal state: %w", err)
+		}
+
+		// the deal has an entry in deal states, which means it's already been allocated, nothing to do
+		if found {
 			return nil
 		}
 

@@ -4,7 +4,10 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"strconv"
 	"time"
+
+	"github.com/filecoin-project/go-state-types/abi"
 
 	"github.com/ipfs/go-cid"
 	"github.com/urfave/cli/v2"
@@ -18,19 +21,16 @@ import (
 	"github.com/filecoin-project/lotus/blockstore"
 	"github.com/filecoin-project/lotus/chain/actors"
 	"github.com/filecoin-project/lotus/chain/consensus/filcns"
-	"github.com/filecoin-project/lotus/chain/stmgr"
 	"github.com/filecoin-project/lotus/chain/store"
 	"github.com/filecoin-project/lotus/chain/types"
-	"github.com/filecoin-project/lotus/chain/vm"
 	lcli "github.com/filecoin-project/lotus/cli"
 	"github.com/filecoin-project/lotus/node/repo"
-	"github.com/filecoin-project/lotus/storage/sealer/ffiwrapper"
 )
 
 var invariantsCmd = &cli.Command{
 	Name:        "check-invariants",
 	Description: "Check state invariants",
-	ArgsUsage:   "[block to look back from]",
+	ArgsUsage:   "[stateRoot height]",
 	Flags: []cli.Flag{
 		&cli.StringFlag{
 			Name:  "repo",
@@ -40,14 +40,16 @@ var invariantsCmd = &cli.Command{
 	Action: func(cctx *cli.Context) error {
 		ctx := context.TODO()
 
-		if cctx.NArg() != 1 {
+		if cctx.NArg() != 2 {
 			return lcli.IncorrectNumArgs(cctx)
 		}
 
-		blkCid, err := cid.Decode(cctx.Args().First())
+		rootCid, err := cid.Decode(cctx.Args().First())
 		if err != nil {
 			return fmt.Errorf("failed to parse input: %w", err)
 		}
+
+		height, err := strconv.ParseUint(cctx.Args().Get(1), 10, 64)
 
 		fsrepo, err := repo.NewFS(cctx.String("repo"))
 		if err != nil {
@@ -82,25 +84,7 @@ var invariantsCmd = &cli.Command{
 		cs := store.NewChainStore(bs, bs, mds, filcns.Weight, nil)
 		defer cs.Close() //nolint:errcheck
 
-		sm, err := stmgr.NewStateManager(cs, filcns.NewTipSetExecutor(), vm.Syscalls(ffiwrapper.ProofVerifier), filcns.DefaultUpgradeSchedule(), nil)
-		if err != nil {
-			return err
-		}
-
-		blk, err := cs.GetBlock(ctx, blkCid)
-		if err != nil {
-			return err
-		}
-
-		ts, err := cs.LoadTipSet(ctx, types.NewTipSetKey(blk.Parents...))
-		if err != nil {
-			return err
-		}
-
-		nv := sm.GetNetworkVersion(ctx, ts.Height())
-		fmt.Println("Network Version ", nv)
-
-		av, err := actorstypes.VersionForNetwork(nv)
+		av := actorstypes.Version9
 		fmt.Println("Actors Version ", av)
 
 		actorCodeCids, err := actors.GetActorCodeIDs(av)
@@ -112,7 +96,7 @@ var invariantsCmd = &cli.Command{
 
 		// Load the state root.
 		var stateRoot types.StateRoot
-		if err := actorStore.Get(ctx, ts.ParentState(), &stateRoot); err != nil {
+		if err := actorStore.Get(ctx, rootCid, &stateRoot); err != nil {
 			return xerrors.Errorf("failed to decode state root: %w", err)
 		}
 
@@ -123,12 +107,12 @@ var invariantsCmd = &cli.Command{
 		var messages *builtin.MessageAccumulator
 		switch av {
 		case actorstypes.Version8:
-			messages, err = v8.CheckStateInvariants(actorTree, ts.Height()-1, actorCodeCids)
+			messages, err = v8.CheckStateInvariants(actorTree, abi.ChainEpoch(height), actorCodeCids)
 			if err != nil {
 				return xerrors.Errorf("checking state invariants: %w", err)
 			}
 		case actorstypes.Version9:
-			messages, err = v9.CheckStateInvariants(actorTree, ts.Height()-1, actorCodeCids)
+			messages, err = v9.CheckStateInvariants(actorTree, abi.ChainEpoch(height), actorCodeCids)
 			if err != nil {
 				return xerrors.Errorf("checking state invariants: %w", err)
 			}
