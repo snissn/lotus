@@ -698,6 +698,8 @@ func (m *Manager) FinalizeReplicaUpdate(ctx context.Context, sector storiface.Se
 		return xerrors.Errorf("acquiring sector lock: %w", err)
 	}
 
+	log.Errorf("Finalizing ReplicaUpdate, keeping %d entries", len(keepUnsealed))
+
 	// first check if the unsealed file exists anywhere; If it doesn't ignore it
 	moveUnsealed := storiface.FTUnsealed
 	{
@@ -762,6 +764,7 @@ func (m *Manager) FinalizeReplicaUpdate(ctx context.Context, sector storiface.Se
 	err = multierr.Append(err, move(storiface.FTSealed)) // Sealed separate from cache just in case ReleaseSectorKey was already called
 	// if we found unsealed files, AND have been asked to keep at least one, move unsealed
 	if moveUnsealed != storiface.FTNone && len(keepUnsealed) != 0 {
+		log.Errorf("Asking to move unsealed to long-term storage!")
 		err = multierr.Append(err, move(moveUnsealed))
 	}
 

@@ -554,6 +554,10 @@ func (l *LocalWorker) MoveStorage(ctx context.Context, sector storiface.SectorRe
 				continue
 			}
 
+			if fileType == storiface.FTUnsealed {
+				log.Errorf("Asked to move Unsealed storage, as part of %d", types)
+			}
+
 			if err := l.storage.RemoveCopies(ctx, sector.ID, fileType); err != nil {
 				return nil, xerrors.Errorf("rm copies (t:%s, s:%v): %w", fileType, sector, err)
 			}
