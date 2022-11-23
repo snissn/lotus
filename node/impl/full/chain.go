@@ -326,24 +326,24 @@ func (a *ChainAPI) ChainSetHead(ctx context.Context, tsk types.TipSetKey) error 
 		return xerrors.Errorf("loading tipset %s: %w", tsk, err)
 	}
 
-	currentTs, err := a.ChainHead(ctx)
-	if err != nil {
-		return xerrors.Errorf("getting head: %w", err)
-	}
-
-	for currentTs.Height() >= newHeadTs.Height() {
-		for _, blk := range currentTs.Key().Cids() {
-			err = a.Chain.UnmarkBlockAsValidated(ctx, blk)
-			if err != nil {
-				return xerrors.Errorf("unmarking block as validated %s: %w", blk, err)
-			}
-		}
-
-		currentTs, err = a.ChainGetTipSet(ctx, currentTs.Parents())
-		if err != nil {
-			return xerrors.Errorf("loading tipset: %w", err)
-		}
-	}
+	//currentTs, err := a.ChainHead(ctx)
+	//if err != nil {
+	//	return xerrors.Errorf("getting head: %w", err)
+	//}
+	//
+	//for currentTs.Height() >= newHeadTs.Height() {
+	//	for _, blk := range currentTs.Key().Cids() {
+	//		err = a.Chain.UnmarkBlockAsValidated(ctx, blk)
+	//		if err != nil {
+	//			return xerrors.Errorf("unmarking block as validated %s: %w", blk, err)
+	//		}
+	//	}
+	//
+	//	currentTs, err = a.ChainGetTipSet(ctx, currentTs.Parents())
+	//	if err != nil {
+	//		return xerrors.Errorf("loading tipset: %w", err)
+	//	}
+	//}
 
 	return a.Chain.SetHead(ctx, newHeadTs)
 }
