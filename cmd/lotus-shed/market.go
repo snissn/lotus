@@ -296,22 +296,28 @@ var marketDealsTotalStorageCmd = &cli.Command{
 		defer closer()
 
 		ctx := lcli.ReqContext(cctx)
+		fmt.Println("starting query")
 
 		deals, err := api.StateMarketDeals(ctx, types.EmptyTSK)
 		if err != nil {
 			return err
 		}
 
+		fmt.Println("done with query")
+
 		total := big.Zero()
 		count := 0
 
-		for _, deal := range deals {
-			if market.IsDealActive(deal.State) {
-				dealStorage := big.NewIntUnsigned(uint64(deal.Proposal.PieceSize))
-				total = big.Add(total, dealStorage)
-				count++
+		for k, deal := range deals {
+			if deal != nil {
+				if market.IsDealActive(deal.State) {
+					dealStorage := big.NewIntUnsigned(uint64(deal.Proposal.PieceSize))
+					total = big.Add(total, dealStorage)
+					count++
+				}
+			} else {
+				fmt.Println("deal ", k, " is nil ")
 			}
-
 		}
 
 		fmt.Println("Total deals: ", count)
