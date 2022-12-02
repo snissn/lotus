@@ -16,6 +16,7 @@ import (
 	big2 "github.com/filecoin-project/go-state-types/big"
 	builtin4 "github.com/filecoin-project/specs-actors/v4/actors/builtin"
 	"github.com/filecoin-project/specs-actors/v4/actors/util/adt"
+	miner7 "github.com/filecoin-project/specs-actors/v7/actors/builtin/miner"
 
 	"github.com/filecoin-project/lotus/chain/actors/builtin/miner"
 	"github.com/filecoin-project/lotus/chain/actors/builtin/power"
@@ -115,6 +116,11 @@ var minerTypesCmd = &cli.Command{
 				if err != nil {
 					return err
 				}
+
+				// juju actually get the sector on chain info
+				si := miner7.SectorOnChainInfo{}
+
+				miner7.PledgePenaltyForTermination(si.ExpectedDayReward, juju_calculate_sector_age, si.ExpectedStoragePledge, juju_get_the_other_values...)
 
 				if mi.WindowPoStProofType == abi.RegisteredPoStProof_StackedDrgWindow64GiBV1 {
 					mp, f, err := ps.MinerPower(addr)
