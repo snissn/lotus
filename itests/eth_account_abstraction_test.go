@@ -2,16 +2,19 @@ package itests
 
 import (
 	"context"
-	"fmt"
+	"encoding/hex"
+	"os"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
 
 	"github.com/filecoin-project/go-state-types/abi"
+	"github.com/filecoin-project/go-state-types/big"
 	"github.com/filecoin-project/go-state-types/exitcode"
 
 	"github.com/filecoin-project/lotus/api"
+	"github.com/filecoin-project/lotus/build"
 	"github.com/filecoin-project/lotus/chain/actors/builtin"
 	"github.com/filecoin-project/lotus/chain/types"
 	"github.com/filecoin-project/lotus/chain/types/ethtypes"
@@ -19,15 +22,16 @@ import (
 	"github.com/filecoin-project/lotus/itests/kit"
 )
 
-// TestEthAccountAbstraction goes over the account abstraction workflow:
+// TestEthAccountAbstractionHappyPath goes over the account abstraction workflow:
 // - an embryo is created when it receives a message
-// - the embryo turns into an EOA when it sends a message
-func TestEthAccountAbstraction(t *testing.T) {
+// - the embryo turns into an EOA when it send
+//
+// s a message
+func TestEthAccountAbstractionHappyPath(t *testing.T) {
 	kit.QuietMiningLogs()
 
-	blockTime := 100 * time.Millisecond
 	client, _, ens := kit.EnsembleMinimal(t, kit.MockProofs(), kit.ThroughRPC())
-	ens.InterconnectAll().BeginMining(blockTime)
+	ens.InterconnectAll().BeginMining(10 * time.Millisecond)
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
@@ -37,8 +41,6 @@ func TestEthAccountAbstraction(t *testing.T) {
 
 	embryoAddress, err := client.WalletImport(ctx, &secpKey.KeyInfo)
 	require.NoError(t, err)
-
-	fmt.Println(embryoAddress)
 
 	// create an embryo actor at the target address
 	msgCreateEmbryo := &types.Message{
@@ -50,7 +52,8 @@ func TestEthAccountAbstraction(t *testing.T) {
 	require.NoError(t, err)
 	mLookup, err := client.StateWaitMsg(ctx, smCreateEmbryo.Cid(), 3, api.LookbackNoLimit, true)
 	require.NoError(t, err)
-	require.Equal(t, exitcode.Ok, mLookup.Receipt.ExitCode)
+
+	require.True(t, mLookup.Receipt.ExitCode.IsSuccess())
 
 	// confirm the embryo is an embryo
 	embryoActor, err := client.StateGetActor(ctx, embryoAddress, types.EmptyTSK)
@@ -58,6 +61,7 @@ func TestEthAccountAbstraction(t *testing.T) {
 
 	require.Equal(t, uint64(0), embryoActor.Nonce)
 	require.True(t, builtin.IsEmbryoActor(embryoActor.Code))
+	require.Equal(t, msgCreateEmbryo.Value, embryoActor.Balance)
 
 	// send a message from the embryo address
 	msgFromEmbryo := &types.Message{
@@ -82,7 +86,7 @@ func TestEthAccountAbstraction(t *testing.T) {
 
 	mLookup, err = client.StateWaitMsg(ctx, smFromEmbryoCid, 3, api.LookbackNoLimit, true)
 	require.NoError(t, err)
-	require.Equal(t, exitcode.Ok, mLookup.Receipt.ExitCode)
+	require.True(t, mLookup.Receipt.ExitCode.IsSuccess())
 
 	// confirm ugly Embryo duckling has turned into a beautiful EthAccount swan
 
@@ -118,7 +122,7 @@ func TestEthAccountAbstraction(t *testing.T) {
 
 	mLookup, err = client.StateWaitMsg(ctx, smFromEmbryoCid, 3, api.LookbackNoLimit, true)
 	require.NoError(t, err)
-	require.Equal(t, exitcode.Ok, mLookup.Receipt.ExitCode)
+	require.True(t, mLookup.Receipt.ExitCode.IsSuccess())
 
 	// confirm no changes in code CID
 
@@ -128,4 +132,186 @@ func TestEthAccountAbstraction(t *testing.T) {
 
 	require.False(t, builtin.IsEmbryoActor(eoaActor.Code))
 	require.True(t, builtin.IsEthAccountActor(eoaActor.Code))
+}
+
+// Tests that an embryo turns into an EthAccout even if the message fails
+func TestEthAccountAbstractionFailure(t *testing.T) {
+	kit.QuietMiningLogs()
+
+	client, _, ens := kit.EnsembleMinimal(t, kit.MockProofs(), kit.ThroughRPC())
+	ens.InterconnectAll().BeginMining(10 * time.Millisecond)
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+
+	secpKey, err := key.GenerateKey(types.KTDelegated)
+	require.NoError(t, err)
+
+	embryoAddress, err := client.WalletImport(ctx, &secpKey.KeyInfo)
+	require.NoError(t, err)
+
+	// create an embryo actor at the target address
+	msgCreateEmbryo := &types.Message{
+		From:  client.DefaultKey.Address,
+		To:    embryoAddress,
+		Value: abi.TokenAmount(types.MustParseFIL("100")),
+	}
+	smCreateEmbryo, err := client.MpoolPushMessage(ctx, msgCreateEmbryo, nil)
+	require.NoError(t, err)
+	mLookup, err := client.StateWaitMsg(ctx, smCreateEmbryo.Cid(), 3, api.LookbackNoLimit, true)
+	require.NoError(t, err)
+	require.True(t, mLookup.Receipt.ExitCode.IsSuccess())
+
+	// confirm the embryo is an embryo
+	embryoActor, err := client.StateGetActor(ctx, embryoAddress, types.EmptyTSK)
+	require.NoError(t, err)
+
+	require.Equal(t, uint64(0), embryoActor.Nonce)
+	require.True(t, builtin.IsEmbryoActor(embryoActor.Code))
+	require.Equal(t, msgCreateEmbryo.Value, embryoActor.Balance)
+
+	// send a message from the embryo address
+	msgFromEmbryo := &types.Message{
+		From: embryoAddress,
+		To:   embryoAddress,
+	}
+	msgFromEmbryo, err = client.GasEstimateMessageGas(ctx, msgFromEmbryo, nil, types.EmptyTSK)
+	require.NoError(t, err)
+
+	msgFromEmbryo.Value =
+		abi.TokenAmount(types.MustParseFIL("1000"))
+	txArgs, err := ethtypes.NewEthTxArgsFromMessage(msgFromEmbryo)
+	require.NoError(t, err)
+
+	digest, err := txArgs.ToRlpUnsignedMsg()
+	require.NoError(t, err)
+
+	siggy, err := client.WalletSign(ctx, embryoAddress, digest)
+	require.NoError(t, err)
+
+	smFromEmbryoCid, err := client.MpoolPush(ctx, &types.SignedMessage{Message: *msgFromEmbryo, Signature: *siggy})
+	require.NoError(t, err)
+
+	mLookup, err = client.StateWaitMsg(ctx, smFromEmbryoCid, 3, api.LookbackNoLimit, true)
+	require.NoError(t, err)
+	// message should have failed because we didn't have enough $$$
+	require.Equal(t, exitcode.SysErrInsufficientFunds, mLookup.Receipt.ExitCode)
+
+	// BUT, ugly Embryo duckling should have turned into a beautiful EthAccount swan anyway
+
+	eoaActor, err := client.StateGetActor(ctx, embryoAddress, types.EmptyTSK)
+	require.NoError(t, err)
+
+	require.False(t, builtin.IsEmbryoActor(eoaActor.Code))
+	require.True(t, builtin.IsEthAccountActor(eoaActor.Code))
+	require.Equal(t, uint64(1), eoaActor.Nonce)
+
+	// Send a valid message now, it should succeed without any code CID changes
+
+	msgFromEmbryo = &types.Message{
+		From:  embryoAddress,
+		To:    embryoAddress,
+		Nonce: 1,
+		Value: eoaActor.Balance,
+	}
+
+	msgFromEmbryo, err = client.GasEstimateMessageGas(ctx, msgFromEmbryo, nil, types.EmptyTSK)
+	require.NoError(t, err)
+
+	txArgs, err = ethtypes.NewEthTxArgsFromMessage(msgFromEmbryo)
+	require.NoError(t, err)
+
+	digest, err = txArgs.ToRlpUnsignedMsg()
+	require.NoError(t, err)
+
+	siggy, err = client.WalletSign(ctx, embryoAddress, digest)
+	require.NoError(t, err)
+
+	smFromEmbryoCid, err = client.MpoolPush(ctx, &types.SignedMessage{Message: *msgFromEmbryo, Signature: *siggy})
+	require.NoError(t, err)
+
+	mLookup, err = client.StateWaitMsg(ctx, smFromEmbryoCid, 3, api.LookbackNoLimit, true)
+	require.NoError(t, err)
+	require.True(t, mLookup.Receipt.ExitCode.IsSuccess())
+
+	// confirm no changes in code CID
+
+	eoaActor, err = client.StateGetActor(ctx, embryoAddress, types.EmptyTSK)
+	require.NoError(t, err)
+	require.Equal(t, uint64(2), eoaActor.Nonce)
+
+	require.False(t, builtin.IsEmbryoActor(eoaActor.Code))
+	require.True(t, builtin.IsEthAccountActor(eoaActor.Code))
+}
+
+// Tests that f4 addresess that aren't embryos/ethaccounts can't be top-level senders
+func TestEthAccountAbstractionFailsFromEvmActor(t *testing.T) {
+	kit.QuietMiningLogs()
+
+	client, _, ens := kit.EnsembleMinimal(t, kit.MockProofs(), kit.ThroughRPC())
+	ens.InterconnectAll().BeginMining(10 * time.Millisecond)
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+
+	// create a new Ethereum account
+	key, ethAddr, deployer := client.EVM().NewAccount()
+
+	// send some funds to the f410 address
+	kit.SendFunds(ctx, t, client, deployer, types.FromFil(10))
+
+	// install a contract from the embryo
+	contractHex, err := os.ReadFile("./contracts/SimpleCoin.bin")
+	require.NoError(t, err)
+
+	contract, err := hex.DecodeString(string(contractHex))
+	require.NoError(t, err)
+
+	gaslimit, err := client.EthEstimateGas(ctx, ethtypes.EthCall{
+		From: &ethAddr,
+		Data: contract,
+	})
+	require.NoError(t, err)
+
+	maxPriorityFeePerGas, err := client.EthMaxPriorityFeePerGas(ctx)
+	require.NoError(t, err)
+
+	tx := ethtypes.EthTxArgs{
+		ChainID:              build.Eip155ChainId,
+		Value:                big.Zero(),
+		Nonce:                0,
+		MaxFeePerGas:         types.NanoFil,
+		MaxPriorityFeePerGas: big.Int(maxPriorityFeePerGas),
+		GasLimit:             int(gaslimit),
+		Input:                contract,
+		V:                    big.Zero(),
+		R:                    big.Zero(),
+		S:                    big.Zero(),
+	}
+
+	client.EVM().SignTransaction(&tx, key.PrivateKey)
+
+	client.EVM().SubmitTransaction(ctx, &tx)
+
+	smsg, err := tx.ToSignedMessage()
+	require.NoError(t, err)
+
+	ml, err := client.StateWaitMsg(ctx, smsg.Cid(), 1, api.LookbackNoLimit, true)
+	require.NoError(t, err)
+	require.True(t, ml.Receipt.ExitCode.IsSuccess())
+
+	// Get contract address, assert it's an EVM actor
+	contractAddr, err := client.EVM().ComputeContractAddress(ethAddr, 0).ToFilecoinAddress()
+	require.NoError(t, err)
+
+	client.AssertActorType(ctx, contractAddr, "evm")
+
+	msgFromContract := &types.Message{
+		From: contractAddr,
+		To:   contractAddr,
+	}
+
+	_, err = client.GasEstimateMessageGas(ctx, msgFromContract, nil, types.EmptyTSK)
+	require.Error(t, err, "expected gas estimation to fail")
+	require.Contains(t, err.Error(), "SysErrSenderInvalid")
 }
