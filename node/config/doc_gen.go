@@ -70,7 +70,7 @@ this time become eligible for automatic deletion.`,
 the entire chain)`,
 		},
 		{
-			Name: "ActorEventDatabasePath",
+			Name: "TransactionHashLookupDatabasePath",
 			Type: "string",
 
 			Comment: `EventHistoryDatabasePath is the full path to a sqlite database that will be used to index actor events to
@@ -390,6 +390,20 @@ see https://lotus.filecoin.io/storage-providers/advanced-configurations/market/#
 			Comment: ``,
 		},
 	},
+	"EthTxHashConfig": []DocField{
+		{
+			Name: "EnableEthHashToFilecoinCidMapping",
+			Type: "bool",
+
+			Comment: `EnableEthHashToFilecoinCidMapping enables storing a mapping of eth transaction hashes to filecoin message Cids`,
+		},
+		{
+			Name: "TransactionHashLookupDatabasePath",
+			Type: "string",
+
+			Comment: ``,
+		},
+	},
 	"FeeConfig": []DocField{
 		{
 			Name: "DefaultMaxFee",
@@ -432,6 +446,12 @@ see https://lotus.filecoin.io/storage-providers/advanced-configurations/market/#
 		{
 			Name: "ActorEvent",
 			Type: "ActorEventConfig",
+
+			Comment: ``,
+		},
+		{
+			Name: "EthTxHashConfig",
+			Type: "EthTxHashConfig",
 
 			Comment: ``,
 		},

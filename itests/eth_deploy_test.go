@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"reflect"
 	"strconv"
 	"testing"
@@ -33,6 +34,8 @@ func TestDeployment(t *testing.T) {
 
 	// reasonable blocktime so that the tx sits in the mpool for a bit during the test.
 	// although this is non-deterministic...
+
+	dbpath := filepath.Join(t.TempDir(), "hashlookup.db")
 	blockTime := 1 * time.Second
 	client, _, ens := kit.EnsembleMinimal(
 		t,
@@ -42,6 +45,7 @@ func TestDeployment(t *testing.T) {
 			cfg.ActorEvent.EnableRealTimeFilterAPI = true
 			return nil
 		}),
+		kit.EthTxHashLookup(dbpath),
 	)
 	ens.InterconnectAll().BeginMining(blockTime)
 

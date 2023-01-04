@@ -388,7 +388,17 @@ func NewEthHashFromHex(s string) (EthHash, error) {
 }
 
 func EthHashData(b []byte) EthHash {
-	return EthHash(blake2b.Sum256(b))
+	return blake2b.Sum256(b)
+}
+
+func EthHashFromTxBytes(b []byte) EthHash {
+	hasher := sha3.NewLegacyKeccak256()
+	hasher.Write(b)
+	hash := hasher.Sum(nil)
+
+	var ethHash EthHash
+	copy(ethHash[:], hash)
+	return ethHash
 }
 
 func (h EthHash) String() string {
@@ -579,7 +589,7 @@ type EthLog struct {
 	// The index corresponds to the sequence of messages produced by ChainGetParentMessages
 	TransactionIndex EthUint64 `json:"transactionIndex"`
 
-	// TransactionHash is the cid of the message that produced the event log.
+	// TransactionHash is the hash of the RLP message that produced the event log.
 	TransactionHash EthHash `json:"transactionHash"`
 
 	// BlockHash is the hash of the tipset containing the message that produced the log.

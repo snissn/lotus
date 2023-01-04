@@ -18,6 +18,7 @@ import (
 	"github.com/filecoin-project/go-state-types/abi"
 
 	"github.com/filecoin-project/lotus/chain/types"
+	"github.com/filecoin-project/lotus/chain/types/ethtypes"
 )
 
 var pragmas = []string{
@@ -52,6 +53,11 @@ var ddls = []string{
 		value BLOB NOT NULL
 	)`,
 
+	`CREATE TABLE IF NOT EXISTS tx_hash_lookup (
+		hash TEXT PRIMARY KEY,
+		cid TEXT NOT NULL
+	)`,
+
 	// metadata containing version of schema
 	`CREATE TABLE IF NOT EXISTS _meta (
     	version UINT64 NOT NULL UNIQUE
@@ -71,10 +77,58 @@ const (
 	insertEntry = `INSERT OR IGNORE INTO event_entry
 	(event_id, indexed, flags, key, value)
 	VALUES(?, ?, ?, ?, ?)`
+
+	insertTxHash = `INSERT OR IGNORE INTO tx_hash_lookup
+	(hash, cid)
+	VALUES(?, ?)`
 )
 
 type EventIndex struct {
 	db *sql.DB
+}
+
+func (ei *EventIndex) InsertTxHash(txHash ethtypes.EthHash, c cid.Cid) error {
+	hashEntry, err := ei.db.Prepare(insertTxHash)
+	if err != nil {
+		return xerrors.Errorf("prepare insert event: %w", err)
+	}
+
+	_, err = hashEntry.Exec(txHash.String(), c.String())
+	return err
+}
+
+func (ei *EventIndex) LookupCidFromTxHash(txHash ethtypes.EthHash) (cid.Cid, error) {
+	q, err := ei.db.Query("SELECT cid FROM tx_hash_lookup WHERE hash = :hash;", sql.Named("hash", txHash.String()))
+	if err != nil {
+		return cid.Undef, err
+	}
+
+	var c string
+	if !q.Next() {
+		return cid.Undef, xerrors.Errorf("transaction hash %s not found", txHash.String())
+	}
+	err = q.Scan(&c)
+	if err != nil {
+		return cid.Undef, err
+	}
+	return cid.Decode(c)
+}
+
+func (ei *EventIndex) LookupTxHashFromCid(c cid.Cid) (ethtypes.EthHash, error) {
+	q, err := ei.db.Query("SELECT hash FROM tx_hash_lookup WHERE cid = :cid;", sql.Named("cid", c.String()))
+	if err != nil {
+		return ethtypes.EmptyEthHash, err
+	}
+
+	var hashString string
+	if !q.Next() {
+		return ethtypes.EmptyEthHash, xerrors.Errorf("transaction hash %s not found", c.String())
+	}
+	err = q.Scan(&hashString)
+	if err != nil {
+		return ethtypes.EmptyEthHash, err
+	}
+	return ethtypes.EthHashFromHex(hashString)
 }
 
 func NewEventIndex(path string) (*EventIndex, error) {

@@ -161,7 +161,6 @@ var ChainNode = Options(
 		Override(new(messagepool.Provider), messagepool.NewProvider),
 		Override(new(messagepool.MpoolNonceAPI), From(new(*messagepool.MessagePool))),
 		Override(new(full.ChainModuleAPI), From(new(full.ChainModule))),
-		Override(new(full.EthModuleAPI), From(new(full.EthModule))),
 		Override(new(full.GasModuleAPI), From(new(full.GasModule))),
 		Override(new(full.MpoolModuleAPI), From(new(full.MpoolModule))),
 		Override(new(full.StateModuleAPI), From(new(full.StateModule))),
@@ -260,6 +259,8 @@ func ConfigFullNode(c interface{}) Option {
 		// Actor event filtering support
 		Override(new(events.EventAPI), From(new(modules.EventAPI))),
 		Override(new(full.EthEventAPI), modules.EthEventAPI(cfg.ActorEvent)),
+
+		Override(new(full.EthModuleAPI), modules.EthModuleAPI(cfg.EthTxHashConfig)),
 	)
 }
 

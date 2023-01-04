@@ -76,7 +76,6 @@ func TestEthNewPendingTransactionFilter(t *testing.T) {
 		}
 	}()
 
-	// var sms []*types.SignedMessage
 	for i := 0; i < iterations; i++ {
 		msg := &types.Message{
 			From:  client.DefaultKey.Address,
@@ -87,9 +86,6 @@ func TestEthNewPendingTransactionFilter(t *testing.T) {
 		sm, err := client.MpoolPushMessage(ctx, msg, nil)
 		require.NoError(t, err)
 		require.EqualValues(t, i, sm.Message.Nonce)
-
-		// FIXME this was here and unused. Use or remove.
-		// sms = append(sms, sm)
 	}
 
 	select {
@@ -189,9 +185,10 @@ func TestEthNewFilterCatchAll(t *testing.T) {
 	require := require.New(t)
 
 	kit.QuietMiningLogs()
+	dbpath := filepath.Join(t.TempDir(), "hashlookup.db")
 
 	blockTime := 100 * time.Millisecond
-	client, _, ens := kit.EnsembleMinimal(t, kit.MockProofs(), kit.ThroughRPC(), kit.RealTimeFilterAPI())
+	client, _, ens := kit.EnsembleMinimal(t, kit.MockProofs(), kit.ThroughRPC(), kit.RealTimeFilterAPI(), kit.EthTxHashLookup(dbpath))
 	ens.InterconnectAll().BeginMining(blockTime)
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
@@ -276,9 +273,9 @@ func TestEthNewFilterCatchAll(t *testing.T) {
 
 	received := make(map[ethtypes.EthHash]msgInTipset)
 	for m := range msgChan {
-		eh, err := ethtypes.NewEthHashFromCid(m.msg.Cid)
+		eh, err := client.EthGetTransactionHashByCid(ctx, m.msg.Cid)
 		require.NoError(err)
-		received[eh] = m
+		received[*eh] = m
 	}
 	require.Equal(iterations, len(received), "all messages on chain")
 

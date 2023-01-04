@@ -181,6 +181,76 @@ func (cs *ChainStore) BlockMsgsForTipset(ctx context.Context, ts *types.TipSet) 
 	return out, nil
 }
 
+// Returns a deduped list of messages in canonical order
+func (cs *ChainStore) MsgsForTipset(ctx context.Context, ts *types.TipSet) ([]*types.Message, []*types.SignedMessage, error) {
+	applied := make(map[address.Address]uint64)
+
+	cst := cbor.NewCborStore(cs.stateBlockstore)
+	st, err := state.LoadStateTree(cst, ts.Blocks()[0].ParentStateRoot)
+	if err != nil {
+		return nil, nil, xerrors.Errorf("failed to load state tree at tipset %s: %w", ts, err)
+	}
+
+	selectMsg := func(m *types.Message) (bool, error) {
+		var sender address.Address
+		if ts.Height() >= build.UpgradeHyperdriveHeight {
+			sender, err = st.LookupID(m.From)
+			if err != nil {
+				return false, err
+			}
+		} else {
+			sender = m.From
+		}
+
+		// The first match for a sender is guaranteed to have correct nonce -- the block isn't valid otherwise
+		if _, ok := applied[sender]; !ok {
+			applied[sender] = m.Nonce
+		}
+
+		if applied[sender] != m.Nonce {
+			return false, nil
+		}
+
+		applied[sender]++
+
+		return true, nil
+	}
+
+	var blsMessages []*types.Message
+	var secpkMessages []*types.SignedMessage
+	for _, b := range ts.Blocks() {
+
+		bms, sms, err := cs.MessagesForBlock(ctx, b)
+		if err != nil {
+			return nil, nil, xerrors.Errorf("failed to get messages for block: %w", err)
+		}
+
+		for _, bmsg := range bms {
+			b, err := selectMsg(bmsg.VMMessage())
+			if err != nil {
+				return nil, nil, xerrors.Errorf("failed to decide whether to select message for block: %w", err)
+			}
+
+			if b {
+				blsMessages = append(blsMessages, bmsg)
+			}
+		}
+
+		for _, smsg := range sms {
+			b, err := selectMsg(smsg.VMMessage())
+			if err != nil {
+				return nil, nil, xerrors.Errorf("failed to decide whether to select message for block: %w", err)
+			}
+
+			if b {
+				secpkMessages = append(secpkMessages, smsg)
+			}
+		}
+	}
+
+	return blsMessages, secpkMessages, nil
+}
+
 func (cs *ChainStore) MessagesForTipset(ctx context.Context, ts *types.TipSet) ([]types.ChainMsg, error) {
 	bmsgs, err := cs.BlockMsgsForTipset(ctx, ts)
 	if err != nil {
