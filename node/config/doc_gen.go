@@ -70,7 +70,7 @@ this time become eligible for automatic deletion.`,
 the entire chain)`,
 		},
 		{
-			Name: "TransactionHashLookupDatabasePath",
+			Name: "ActorEventDatabasePath",
 			Type: "string",
 
 			Comment: `EventHistoryDatabasePath is the full path to a sqlite database that will be used to index actor events to

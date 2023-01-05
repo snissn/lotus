@@ -350,7 +350,7 @@
   #EnableEthHashToFilecoinCidMapping = false
 
   # type: string
-  # env var: LOTUS_ETHTXHASHCONFIG_ACTOREVENTDATABASEPATH
-  #ActorEventDatabasePath = ""
+  # env var: LOTUS_ETHTXHASHCONFIG_TRANSACTIONHASHLOOKUPDATABASEPATH
+  #TransactionHashLookupDatabasePath = ""
 
 
