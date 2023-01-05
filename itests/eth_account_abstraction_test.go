@@ -24,9 +24,7 @@ import (
 
 // TestEthAccountAbstractionHappyPath goes over the account abstraction workflow:
 // - an embryo is created when it receives a message
-// - the embryo turns into an EOA when it send
-//
-// s a message
+// - the embryo turns into an EOA when it sends a message
 func TestEthAccountAbstractionHappyPath(t *testing.T) {
 	kit.QuietMiningLogs()
 
