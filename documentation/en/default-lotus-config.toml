@@ -347,10 +347,6 @@
   #
   # type: bool
   # env var: LOTUS_ETHTXHASHCONFIG_ENABLEETHHASHTOFILECOINCIDMAPPING
-  #EnableEthHashToFilecoinCidMapping = false
-
-  # type: string
-  # env var: LOTUS_ETHTXHASHCONFIG_TRANSACTIONHASHLOOKUPDATABASEPATH
-  #TransactionHashLookupDatabasePath = ""
+  #EnableEthHashToFilecoinCidMapping = true
 
 

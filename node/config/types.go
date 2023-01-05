@@ -696,6 +696,4 @@ type ActorEventConfig struct {
 type EthTxHashConfig struct {
 	// EnableEthHashToFilecoinCidMapping enables storing a mapping of eth transaction hashes to filecoin message Cids
 	EnableEthHashToFilecoinCidMapping bool
-
-	TransactionHashLookupDatabasePath string
 }

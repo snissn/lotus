@@ -25,6 +25,7 @@ import (
 
 	"github.com/filecoin-project/lotus/api"
 	"github.com/filecoin-project/lotus/build"
+	"github.com/filecoin-project/lotus/chain"
 	"github.com/filecoin-project/lotus/chain/actors"
 	builtinactors "github.com/filecoin-project/lotus/chain/actors/builtin"
 	"github.com/filecoin-project/lotus/chain/events/filter"
@@ -255,20 +256,21 @@ func (a *EthModule) EthGetTransactionByHash(ctx context.Context, txHash *ethtype
 		return nil, nil
 	}
 
-	var cid cid.Cid
+	c := cid.Undef
 	if a.EthTxHashManager != nil {
 		var err error
-		cid, err = a.EthTxHashManager.EventIndex.LookupCidFromTxHash(*txHash)
+		c, err = a.EthTxHashManager.TransactionHashLookup.LookupCidFromTxHash(*txHash)
 		if err != nil {
 			log.Debug("could not find transaction hash %s in lookup table", txHash.String())
-
-			// This isn't an eth transaction we have the mapping for, so let's look it up as a filecoin message
-			cid = txHash.ToCid()
 		}
+	}
+	// This isn't an eth transaction we have the mapping for, so let's look it up as a filecoin message
+	if c == cid.Undef {
+		c = txHash.ToCid()
 	}
 
 	// first, try to get the cid from mined transactions
-	msgLookup, err := a.StateAPI.StateSearchMsg(ctx, types.EmptyTSK, cid, api.LookbackNoLimit, true)
+	msgLookup, err := a.StateAPI.StateSearchMsg(ctx, types.EmptyTSK, c, api.LookbackNoLimit, true)
 	if err == nil {
 		tx, err := newEthTxFromFilecoinMessageLookup(ctx, msgLookup, -1, a.Chain, a.StateAPI)
 		if err == nil {
@@ -285,7 +287,7 @@ func (a *EthModule) EthGetTransactionByHash(ctx context.Context, txHash *ethtype
 	}
 
 	for _, p := range pending {
-		if p.Cid() == cid {
+		if p.Cid() == c {
 			tx, err := NewEthTxFromFilecoinMessage(ctx, p, a.StateAPI)
 			if err != nil {
 				return nil, fmt.Errorf("could not convert Filecoin message into tx: %s", err)
@@ -321,29 +323,30 @@ func (a *EthModule) EthGetTransactionCount(ctx context.Context, sender ethtypes.
 }
 
 func (a *EthModule) EthGetTransactionReceipt(ctx context.Context, txHash ethtypes.EthHash) (*api.EthTxReceipt, error) {
-	var cid cid.Cid
+	c := cid.Undef
 	if a.EthTxHashManager != nil {
 		var err error
-		cid, err = a.EthTxHashManager.EventIndex.LookupCidFromTxHash(txHash)
+		c, err = a.EthTxHashManager.TransactionHashLookup.LookupCidFromTxHash(txHash)
 		if err != nil {
 			log.Debug("could not find transaction hash %s in lookup table", txHash.String())
-
-			// This isn't an eth transaction we have the mapping for, so let's look it up as an filecoin message
-			cid = txHash.ToCid()
 		}
 	}
+	// This isn't an eth transaction we have the mapping for, so let's look it up as a filecoin message
+	if c == cid.Undef {
+		c = txHash.ToCid()
+	}
 
-	msgLookup, err := a.StateAPI.StateSearchMsg(ctx, types.EmptyTSK, cid, api.LookbackNoLimit, true)
-	if err != nil {
+	msgLookup, err := a.StateAPI.StateSearchMsg(ctx, types.EmptyTSK, c, api.LookbackNoLimit, true)
+	if err != nil || msgLookup == nil {
 		return nil, nil
 	}
 
 	tx, err := newEthTxFromFilecoinMessageLookup(ctx, msgLookup, -1, a.Chain, a.StateAPI)
-	if err != nil {
+	if err != nil && tx.Hash == ethtypes.EmptyEthHash {
 		return nil, nil
 	}
 
-	replay, err := a.StateAPI.StateReplay(ctx, types.EmptyTSK, cid)
+	replay, err := a.StateAPI.StateReplay(ctx, types.EmptyTSK, c)
 	if err != nil {
 		return nil, nil
 	}
@@ -1501,7 +1504,6 @@ func lookupEthAddress(ctx context.Context, addr address.Address, sa StateAPI) (e
 	return ethtypes.EthAddressFromFilecoinAddress(idAddr)
 }
 
-// TODO maybe look up in db
 func EthTxHashFromFilecoinMessageCid(ctx context.Context, c cid.Cid, sa StateAPI) (ethtypes.EthHash, error) {
 	smsg, err := sa.Chain.GetSignedMessage(ctx, c)
 	if err == nil {
@@ -1517,25 +1519,20 @@ func EthTxHashFromSignedFilecoinMessage(ctx context.Context, smsg *types.SignedM
 		if err != nil {
 			return ethtypes.EmptyEthHash, err
 		}
-		return ethTx.TxHash()
+		return ethTx.Hash, nil
 	}
 
 	return ethtypes.NewEthHashFromCid(smsg.Cid())
 }
 
 func NewEthTxFromFilecoinMessage(ctx context.Context, smsg *types.SignedMessage, sa StateAPI) (ethtypes.EthTx, error) {
-	fromEthAddr, err := lookupEthAddress(ctx, smsg.Message.From, sa)
-	if err != nil {
-		return ethtypes.EthTx{}, err
-	}
-
-	toEthAddr, err := lookupEthAddress(ctx, smsg.Message.To, sa)
-	if err != nil {
-		return ethtypes.EthTx{}, err
-	}
+	// Ignore errors here so we can still parse non-eth messages
+	fromEthAddr, _ := lookupEthAddress(ctx, smsg.Message.From, sa)
+	toEthAddr, _ := lookupEthAddress(ctx, smsg.Message.To, sa)
 
 	toAddr := &toEthAddr
 	input := smsg.Message.Params
+	var err error
 	// Check to see if we need to decode as contract deployment.
 	// We don't need to resolve the to address, because there's only one form (an ID).
 	if smsg.Message.To == builtintypes.EthereumAddressManagerActorAddr {
@@ -1584,8 +1581,24 @@ func NewEthTxFromFilecoinMessage(ctx context.Context, smsg *types.SignedMessage,
 		R:                    r,
 		S:                    s,
 	}
-	tx.Hash, _ = tx.TxHash()
-	// TODO we may or may not want to check the error here
+
+	// This is an eth tx
+	if smsg.Signature.Type == crypto.SigTypeDelegated {
+		tx.Hash, err = tx.TxHash()
+		if err != nil {
+			return tx, err
+		}
+	} else if smsg.Signature.Type == crypto.SigTypeUnknown { // BLS Filecoin message
+		tx.Hash, err = ethtypes.NewEthHashFromCid(smsg.Message.Cid())
+		if err != nil {
+			return tx, err
+		}
+	} else { // Secp Filecoin Message
+		tx.Hash, err = ethtypes.NewEthHashFromCid(smsg.Cid())
+		if err != nil {
+			return tx, err
+		}
+	}
 
 	return tx, nil
 }
@@ -1638,15 +1651,21 @@ func newEthTxFromFilecoinMessageLookup(ctx context.Context, msgLookup *api.MsgLo
 
 	smsg, err := cs.GetSignedMessage(ctx, msgLookup.Message)
 	if err != nil {
-		return ethtypes.EthTx{}, err
+		// We couldn't find the signed message, it might be a BLS message, so search for a regular message.
+		msg, err := cs.GetMessage(ctx, msgLookup.Message)
+		if err != nil {
+			return ethtypes.EthTx{}, err
+		}
+		smsg = &types.SignedMessage{
+			Message: *msg,
+			Signature: crypto.Signature{
+				Type: crypto.SigTypeUnknown,
+				Data: nil,
+			},
+		}
 	}
 
 	tx, err := NewEthTxFromFilecoinMessage(ctx, smsg, sa)
-	if err != nil {
-		return ethtypes.EthTx{}, err
-	}
-
-	txHash, err := tx.TxHash()
 	if err != nil {
 		return ethtypes.EthTx{}, err
 	}
@@ -1657,7 +1676,6 @@ func newEthTxFromFilecoinMessageLookup(ctx context.Context, msgLookup *api.MsgLo
 	)
 
 	tx.ChainID = ethtypes.EthUint64(build.Eip155ChainId)
-	tx.Hash = txHash
 	tx.BlockHash = &blkHash
 	tx.BlockNumber = &bn
 	tx.TransactionIndex = &ti
@@ -1778,7 +1796,7 @@ func (m EthTxHashManager) Apply(ctx context.Context, from, to *types.TipSet) err
 				return err
 			}
 
-			err = m.EventIndex.InsertTxHash(hash, smsg.Cid())
+			err = m.TransactionHashLookup.InsertTxHash(hash, smsg.Cid(), int64(to.Height()))
 			if err != nil {
 				return err
 			}
@@ -1789,8 +1807,8 @@ func (m EthTxHashManager) Apply(ctx context.Context, from, to *types.TipSet) err
 }
 
 type EthTxHashManager struct {
-	StateAPI   StateAPI
-	EventIndex *filter.EventIndex
+	StateAPI              StateAPI
+	TransactionHashLookup *chain.TransactionHashLookup
 }
 
 func (m EthTxHashManager) Revert(ctx context.Context, from, to *types.TipSet) error {
@@ -1806,7 +1824,6 @@ func WaitForMpoolUpdates(ctx context.Context, ch <-chan api.MpoolUpdate, manager
 			if u.Type != api.MpoolAdd {
 				continue
 			}
-			fmt.Println(">>>>>> Mpool Add ", u.Message.Signature.Type)
 			if u.Message.Signature.Type != crypto.SigTypeDelegated {
 				continue
 			}
@@ -1816,8 +1833,7 @@ func WaitForMpoolUpdates(ctx context.Context, ch <-chan api.MpoolUpdate, manager
 				log.Errorf("error converting filecoin message to eth tx: %s", err)
 			}
 
-			fmt.Println(">>>>>> DB ADD ")
-			err = manager.EventIndex.InsertTxHash(ethTx.Hash, u.Message.Cid())
+			err = manager.TransactionHashLookup.InsertTxHash(ethTx.Hash, u.Message.Cid(), chain.MemPoolEpoch)
 			if err != nil {
 				log.Errorf("error inserting tx mapping to db: %s", err)
 			}

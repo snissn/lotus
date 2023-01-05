@@ -185,10 +185,9 @@ func TestEthNewFilterCatchAll(t *testing.T) {
 	require := require.New(t)
 
 	kit.QuietMiningLogs()
-	dbpath := filepath.Join(t.TempDir(), "hashlookup.db")
 
 	blockTime := 100 * time.Millisecond
-	client, _, ens := kit.EnsembleMinimal(t, kit.MockProofs(), kit.ThroughRPC(), kit.RealTimeFilterAPI(), kit.EthTxHashLookup(dbpath))
+	client, _, ens := kit.EnsembleMinimal(t, kit.MockProofs(), kit.ThroughRPC(), kit.RealTimeFilterAPI(), kit.EthTxHashLookup())
 	ens.InterconnectAll().BeginMining(blockTime)
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
