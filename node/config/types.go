@@ -541,7 +541,9 @@ type FevmConfig struct {
 	// recently requested blocks that are already cached.
 	// The default size of the cache is 500 blocks.
 	// Note: Setting this value to 0 disables the cache.
-	EthBlkCacheSize int
+    EthBlkCacheSize int
+
+    // (removed) EIP-7702 delegation cap is enforced by network version policy in the mempool.
 }
 
 type EventsConfig struct {

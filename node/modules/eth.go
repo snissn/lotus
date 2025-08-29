@@ -356,3 +356,4 @@ func MakeEventFilterManager(cfg config.EventsConfig) func(EventFilterManagerPara
 		return fm, nil
 	}
 }
+// (removed) EIP-7702 send-path cap wiring; cap is enforced in messagepool with network gating.
