@@ -1,0 +1,146 @@
+package power
+
+import (
+	"github.com/ipfs/go-cid"
+	actorstypes "github.com/filecoin-project/go-state-types/actors"
+	"github.com/filecoin-project/go-address"
+	"github.com/filecoin-project/go-state-types/big"
+	"github.com/filecoin-project/lotus/chain/actors"
+	cbg "github.com/whyrusleeping/cbor-gen"
+	"golang.org/x/xerrors"
+
+	"github.com/filecoin-project/go-state-types/abi"
+	"github.com/filecoin-project/go-state-types/cbor"
+
+	"github.com/filecoin-project/lotus/chain/actors/adt"
+	"github.com/filecoin-project/lotus/chain/actors/builtin"
+	"github.com/filecoin-project/lotus/chain/types"
+	"github.com/filecoin-project/go-state-types/manifest"
+
+{{range .versions}}
+    {{if (le . 7)}}
+	    builtin{{.}} "github.com/filecoin-project/specs-actors{{import .}}actors/builtin"
+    {{end}}
+{{end}}
+	builtin{{.latestVersion}} "github.com/filecoin-project/go-state-types/builtin"
+	powertypes{{.latestVersion}} "github.com/filecoin-project/go-state-types/builtin/v{{.latestVersion}}/power"
+)
+
+var (
+	Address = builtin{{.latestVersion}}.StoragePowerActorAddr
+	Methods = builtin{{.latestVersion}}.MethodsPower
+)
+
+func Load(store adt.Store, act *types.Actor) (State, error) {
+	if name, av, ok := actors.GetActorMetaByCode(act.Code); ok {
+       if name != manifest.PowerKey {
+          return nil, xerrors.Errorf("actor code is not power: %s", name)
+       }
+
+       switch av {
+            {{range .versions}}
+                {{if (ge . 8)}}
+                case actorstypes.Version{{.}}:
+                     return load{{.}}(store, act.Head)
+                 {{end}}
+            {{end}}
+       }
+	}
+
+	switch act.Code {
+{{range .versions}}
+    {{if (le . 7)}}
+        case builtin{{.}}.StoragePowerActorCodeID:
+            return load{{.}}(store, act.Head)
+    {{end}}
+{{end}}
+	}
+
+	return nil, xerrors.Errorf("unknown actor code %s", act.Code)
+}
+
+func MakeState(store adt.Store, av actorstypes.Version) (State, error) {
+	switch av {
+{{range .versions}}
+	case actorstypes.Version{{.}}:
+		return make{{.}}(store)
+{{end}}
+}
+	return nil, xerrors.Errorf("unknown actor version %d", av)
+}
+
+type State interface {
+	cbor.Marshaler
+
+    Code() cid.Cid
+    ActorKey() string
+    ActorVersion() actorstypes.Version
+
+	TotalLocked() (abi.TokenAmount, error)
+	TotalPower() (Claim, error)
+	TotalCommitted() (Claim, error)
+	TotalPowerSmoothed() (builtin.FilterEstimate, error)
+	GetState() interface{}
+
+	// MinerCounts returns the number of miners. Participating is the number
+	// with power above the minimum miner threshold.
+	MinerCounts() (participating, total uint64, err error)
+	// RampStartEpoch returns the epoch at which the FIP0081 pledge calculation
+	// change begins. At and before RampStartEpoch, we use the old calculation. At
+	// RampStartEpoch + RampDurationEpochs, we use 70% old rules + 30% new
+	// calculation.
+	//
+	// This method always returns 0 prior to actors version 15.
+	RampStartEpoch() int64
+	// RampDurationEpochs returns the number of epochs over which the new FIP0081
+	// pledge calculation is ramped up.
+	//
+	// This method always returns 0 prior to actors version 15.
+	RampDurationEpochs() uint64
+	MinerPower(address.Address) (Claim, bool, error)
+	MinerNominalPowerMeetsConsensusMinimum(address.Address) (bool, error)
+	ListAllMiners() ([]address.Address, error)
+	// ForEachClaim iterates over claims in the power actor.
+	// If onlyEligible is true, it applies the MinerNominalPowerMeetsConsensusMinimum check
+	// before returning the actor.
+	ForEachClaim(cb func(miner address.Address, claim Claim) error, onlyEligible bool) error
+	ClaimsChanged(State) (bool, error)
+    CollectEligibleClaims(cacheInOut *builtin{{.latestVersion}}.MapReduceCache) ([]builtin{{.latestVersion}}.OwnedClaim, error)
+
+	// Testing or genesis setup only
+	SetTotalQualityAdjPower(abi.StoragePower) error
+	SetTotalRawBytePower(abi.StoragePower) error
+	SetThisEpochQualityAdjPower(abi.StoragePower) error
+	SetThisEpochRawBytePower(abi.StoragePower) error
+
+	// Diff helpers. Used by Diff* functions internally.
+	claims() (adt.Map, error)
+	decodeClaim(*cbg.Deferred) (Claim, error)
+}
+
+type Claim struct {
+	// Sum of raw byte power for a miner's sectors.
+	RawBytePower abi.StoragePower
+
+	// Sum of quality adjusted power for a miner's sectors.
+	QualityAdjPower abi.StoragePower
+}
+
+func AddClaims(a Claim, b Claim) Claim {
+	return Claim{
+		RawBytePower:    big.Add(a.RawBytePower, b.RawBytePower),
+		QualityAdjPower: big.Add(a.QualityAdjPower, b.QualityAdjPower),
+	}
+}
+
+func AllCodes() []cid.Cid {
+	return []cid.Cid{ {{range .versions}}
+        (&state{{.}}{}).Code(),
+    {{- end}}
+    }
+}
+
+type (
+	MinerPowerParams = powertypes{{.latestVersion}}.MinerPowerParams
+	MinerPowerReturn = powertypes{{.latestVersion}}.MinerPowerReturn
+)

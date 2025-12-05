@@ -1,0 +1,631 @@
+[API]
+  # Binding address for the Lotus API
+  #
+  # type: string
+  # env var: LOTUS_API_LISTENADDRESS
+  #ListenAddress = "/ip4/127.0.0.1/tcp/2345/http"
+
+  # type: string
+  # env var: LOTUS_API_REMOTELISTENADDRESS
+  #RemoteListenAddress = "127.0.0.1:2345"
+
+  # type: Duration
+  # env var: LOTUS_API_TIMEOUT
+  #Timeout = "30s"
+
+
+[Backup]
+  # When set to true disables metadata log (.lotus/kvlog). This can save disk
+  # space by reducing metadata redundancy.
+  # 
+  # Note that in case of metadata corruption it might be much harder to recover
+  # your node if metadata log is disabled
+  #
+  # type: bool
+  # env var: LOTUS_BACKUP_DISABLEMETADATALOG
+  #DisableMetadataLog = true
+
+
+[Logging]
+  [Logging.SubsystemLevels]
+    # env var: LOTUS_LOGGING_SUBSYSTEMLEVELS_EXAMPLE-SUBSYSTEM
+    #example-subsystem = "INFO"
+
+
+[Subsystems]
+  # type: bool
+  # env var: LOTUS_SUBSYSTEMS_ENABLEMINING
+  #EnableMining = true
+
+  # type: bool
+  # env var: LOTUS_SUBSYSTEMS_ENABLESEALING
+  #EnableSealing = true
+
+  # type: bool
+  # env var: LOTUS_SUBSYSTEMS_ENABLESECTORSTORAGE
+  #EnableSectorStorage = true
+
+  # When enabled, the sector index will reside in an external database
+  # as opposed to the local KV store in the miner process
+  # This is useful to allow workers to bypass the lotus miner to access sector information
+  #
+  # type: bool
+  # env var: LOTUS_SUBSYSTEMS_ENABLESECTORINDEXDB
+  #EnableSectorIndexDB = false
+
+  # type: string
+  # env var: LOTUS_SUBSYSTEMS_SEALERAPIINFO
+  #SealerApiInfo = ""
+
+  # type: string
+  # env var: LOTUS_SUBSYSTEMS_SECTORINDEXAPIINFO
+  #SectorIndexApiInfo = ""
+
+  # When window post is enabled, the miner will automatically submit window post proofs
+  # for all sectors that are eligible for window post
+  # IF WINDOW POST IS DISABLED, THE MINER WILL NOT SUBMIT WINDOW POST PROOFS
+  # THIS WILL RESULT IN FAULTS AND PENALTIES IF NO OTHER MECHANISM IS RUNNING
+  # TO SUBMIT WINDOW POST PROOFS.
+  # Note: This option is entirely disabling the window post scheduler,
+  # not just the builtin PoSt computation like Proving.DisableBuiltinWindowPoSt.
+  # This option will stop lotus-miner from performing any actions related
+  # to window post, including scheduling, submitting proofs, and recovering
+  # sectors.
+  #
+  # type: bool
+  # env var: LOTUS_SUBSYSTEMS_DISABLEWINDOWPOST
+  #DisableWindowPoSt = false
+
+  # When winning post is disabled, the miner process will NOT attempt to mine
+  # blocks. This should only be set when there's an external process mining
+  # blocks on behalf of the miner.
+  # When disabled and no external block producers are configured, all potential
+  # block rewards will be missed!
+  #
+  # type: bool
+  # env var: LOTUS_SUBSYSTEMS_DISABLEWINNINGPOST
+  #DisableWinningPoSt = false
+
+
+[Dealmaking]
+  # Minimum start epoch buffer to give time for sealing of sector with deal.
+  #
+  # type: uint64
+  # env var: LOTUS_DEALMAKING_STARTEPOCHSEALINGBUFFER
+  #StartEpochSealingBuffer = 480
+
+
+[Proving]
+  # Maximum number of sector checks to run in parallel. (0 = unlimited)
+  # 
+  # WARNING: Setting this value too high may make the node crash by running out of stack
+  # WARNING: Setting this value too low may make sector challenge reading much slower, resulting in failed PoSt due
+  # to late submission.
+  # 
+  # After changing this option, confirm that the new value works in your setup by invoking
+  # 'lotus-miner proving compute window-post 0'
+  #
+  # type: int
+  # env var: LOTUS_PROVING_PARALLELCHECKLIMIT
+  #ParallelCheckLimit = 32
+
+  # Maximum amount of time a proving pre-check can take for a sector. If the check times out the sector will be skipped
+  # 
+  # WARNING: Setting this value too low risks in sectors being skipped even though they are accessible, just reading the
+  # test challenge took longer than this timeout
+  # WARNING: Setting this value too high risks missing PoSt deadline in case IO operations related to this sector are
+  # blocked (e.g. in case of disconnected NFS mount)
+  #
+  # type: Duration
+  # env var: LOTUS_PROVING_SINGLECHECKTIMEOUT
+  #SingleCheckTimeout = "10m0s"
+
+  # Maximum amount of time a proving pre-check can take for an entire partition. If the check times out, sectors in
+  # the partition which didn't get checked on time will be skipped
+  # 
+  # WARNING: Setting this value too low risks in sectors being skipped even though they are accessible, just reading the
+  # test challenge took longer than this timeout
+  # WARNING: Setting this value too high risks missing PoSt deadline in case IO operations related to this partition are
+  # blocked or slow
+  #
+  # type: Duration
+  # env var: LOTUS_PROVING_PARTITIONCHECKTIMEOUT
+  #PartitionCheckTimeout = "20m0s"
+
+  # Disable Window PoSt computation on the lotus-miner process even if no window PoSt workers are present.
+  # 
+  # WARNING: If no windowPoSt workers are connected, window PoSt WILL FAIL resulting in faulty sectors which will need
+  # to be recovered. Before enabling this option, make sure your PoSt workers work correctly.
+  # 
+  # After changing this option, confirm that the new value works in your setup by invoking
+  # 'lotus-miner proving compute window-post 0'
+  #
+  # type: bool
+  # env var: LOTUS_PROVING_DISABLEBUILTINWINDOWPOST
+  #DisableBuiltinWindowPoSt = false
+
+  # Disable Winning PoSt computation on the lotus-miner process even if no winning PoSt workers are present.
+  # 
+  # WARNING: If no WinningPoSt workers are connected, Winning PoSt WILL FAIL resulting in lost block rewards.
+  # Before enabling this option, make sure your PoSt workers work correctly.
+  #
+  # type: bool
+  # env var: LOTUS_PROVING_DISABLEBUILTINWINNINGPOST
+  #DisableBuiltinWinningPoSt = false
+
+  # Disable WindowPoSt provable sector readability checks.
+  # 
+  # In normal operation, when preparing to compute WindowPoSt, lotus-miner will perform a round of reading challenges
+  # from all sectors to confirm that those sectors can be proven. Challenges read in this process are discarded, as
+  # we're only interested in checking that sector data can be read.
+  # 
+  # When using builtin proof computation (no PoSt workers, and DisableBuiltinWindowPoSt is set to false), this process
+  # can save a lot of time and compute resources in the case that some sectors are not readable - this is caused by
+  # the builtin logic not skipping snark computation when some sectors need to be skipped.
+  # 
+  # When using PoSt workers, this process is mostly redundant, with PoSt workers challenges will be read once, and
+  # if challenges for some sectors aren't readable, those sectors will just get skipped.
+  # 
+  # Disabling sector pre-checks will slightly reduce IO load when proving sectors, possibly resulting in shorter
+  # time to produce window PoSt. In setups with good IO capabilities the effect of this option on proving time should
+  # be negligible.
+  # 
+  # NOTE: It likely is a bad idea to disable sector pre-checks in setups with no PoSt workers.
+  # 
+  # NOTE: Even when this option is enabled, recovering sectors will be checked before recovery declaration message is
+  # sent to the chain
+  # 
+  # After changing this option, confirm that the new value works in your setup by invoking
+  # 'lotus-miner proving compute window-post 0'
+  #
+  # type: bool
+  # env var: LOTUS_PROVING_DISABLEWDPOSTPRECHECKS
+  #DisableWDPoStPreChecks = false
+
+  # Maximum number of partitions to prove in a single SubmitWindowPoSt messace. 0 = network limit (3 in nv21)
+  # 
+  # A single partition may contain up to 2349 32GiB sectors, or 2300 64GiB sectors.
+  # //
+  # Note that setting this value lower may result in less efficient gas use - more messages will be sent,
+  # to prove each deadline, resulting in more total gas use (but each message will have lower gas limit)
+  # 
+  # Setting this value above the network limit has no effect
+  #
+  # type: int
+  # env var: LOTUS_PROVING_MAXPARTITIONSPERPOSTMESSAGE
+  #MaxPartitionsPerPoStMessage = 0
+
+  # In some cases when submitting DeclareFaultsRecovered messages,
+  # there may be too many recoveries to fit in a BlockGasLimit.
+  # In those cases it may be necessary to set this value to something low (eg 1);
+  # Note that setting this value lower may result in less efficient gas use - more messages will be sent than needed,
+  # resulting in more total gas use (but each message will have lower gas limit)
+  #
+  # type: int
+  # env var: LOTUS_PROVING_MAXPARTITIONSPERRECOVERYMESSAGE
+  #MaxPartitionsPerRecoveryMessage = 0
+
+  # Enable single partition per PoSt Message for partitions containing recovery sectors
+  # 
+  # In cases when submitting PoSt messages which contain recovering sectors, the default network limit may still be
+  # too high to fit in the block gas limit. In those cases, it becomes useful to only house the single partition
+  # with recovering sectors in the post message
+  # 
+  # Note that setting this value lower may result in less efficient gas use - more messages will be sent,
+  # to prove each deadline, resulting in more total gas use (but each message will have lower gas limit)
+  #
+  # type: bool
+  # env var: LOTUS_PROVING_SINGLERECOVERINGPARTITIONPERPOSTMESSAGE
+  #SingleRecoveringPartitionPerPostMessage = false
+
+
+[Sealing]
+  # Upper bound on how many sectors can be waiting for more deals to be packed in it before it begins sealing at any given time.
+  # If the miner is accepting multiple deals in parallel, up to MaxWaitDealsSectors of new sectors will be created.
+  # If more than MaxWaitDealsSectors deals are accepted in parallel, only MaxWaitDealsSectors deals will be processed in parallel
+  # Note that setting this number too high in relation to deal ingestion rate may result in poor sector packing efficiency
+  # 0 = no limit
+  #
+  # type: uint64
+  # env var: LOTUS_SEALING_MAXWAITDEALSSECTORS
+  #MaxWaitDealsSectors = 2
+
+  # Upper bound on how many sectors can be sealing+upgrading at the same time when creating new CC sectors (0 = unlimited)
+  #
+  # type: uint64
+  # env var: LOTUS_SEALING_MAXSEALINGSECTORS
+  #MaxSealingSectors = 0
+
+  # Upper bound on how many sectors can be sealing+upgrading at the same time when creating new sectors with deals (0 = unlimited)
+  #
+  # type: uint64
+  # env var: LOTUS_SEALING_MAXSEALINGSECTORSFORDEALS
+  #MaxSealingSectorsForDeals = 0
+
+  # Prefer creating new sectors even if there are sectors Available for upgrading.
+  # This setting combined with MaxUpgradingSectors set to a value higher than MaxSealingSectorsForDeals makes it
+  # possible to use fast sector upgrades to handle high volumes of storage deals, while still using the simple sealing
+  # flow when the volume of storage deals is lower.
+  #
+  # type: bool
+  # env var: LOTUS_SEALING_PREFERNEWSECTORSFORDEALS
+  #PreferNewSectorsForDeals = false
+
+  # Upper bound on how many sectors can be sealing+upgrading at the same time when upgrading CC sectors with deals (0 = MaxSealingSectorsForDeals)
+  #
+  # type: uint64
+  # env var: LOTUS_SEALING_MAXUPGRADINGSECTORS
+  #MaxUpgradingSectors = 0
+
+  # When set to a non-zero value, minimum number of epochs until sector expiration required for sectors to be considered
+  # for upgrades (0 = DealMinDuration = 180 days = 518400 epochs)
+  # 
+  # Note that if all deals waiting in the input queue have lifetimes longer than this value, upgrade sectors will be
+  # required to have expiration of at least the soonest-ending deal
+  #
+  # type: uint64
+  # env var: LOTUS_SEALING_MINUPGRADESECTOREXPIRATION
+  #MinUpgradeSectorExpiration = 0
+
+  # DEPRECATED: Target expiration is no longer used
+  #
+  # type: uint64
+  # env var: LOTUS_SEALING_MINTARGETUPGRADESECTOREXPIRATION
+  #MinTargetUpgradeSectorExpiration = 0
+
+  # CommittedCapacitySectorLifetime is the duration a Committed Capacity (CC) sector will
+  # live before it must be extended or converted into sector containing deals before it is
+  # terminated. Value must be between 180-1278 days (1278 in nv21, 540 before nv21).
+  #
+  # type: Duration
+  # env var: LOTUS_SEALING_COMMITTEDCAPACITYSECTORLIFETIME
+  #CommittedCapacitySectorLifetime = "12960h0m0s"
+
+  # Period of time that a newly created sector will wait for more deals to be packed in to before it starts to seal.
+  # Sectors which are fully filled will start sealing immediately
+  #
+  # type: Duration
+  # env var: LOTUS_SEALING_WAITDEALSDELAY
+  #WaitDealsDelay = "6h0m0s"
+
+  # Whether to keep unsealed copies of deal data regardless of whether the client requested that. This lets the miner
+  # avoid the relatively high cost of unsealing the data later, at the cost of more storage space
+  #
+  # type: bool
+  # env var: LOTUS_SEALING_ALWAYSKEEPUNSEALEDCOPY
+  #AlwaysKeepUnsealedCopy = true
+
+  # Run sector finalization before submitting sector proof to the chain
+  #
+  # type: bool
+  # env var: LOTUS_SEALING_FINALIZEEARLY
+  #FinalizeEarly = false
+
+  # Whether new sectors are created to pack incoming deals
+  # When this is set to false no new sectors will be created for sealing incoming deals
+  # This is useful for forcing all deals to be assigned as snap deals to sectors marked for upgrade
+  #
+  # type: bool
+  # env var: LOTUS_SEALING_MAKENEWSECTORFORDEALS
+  #MakeNewSectorForDeals = true
+
+  # After sealing CC sectors, make them available for upgrading with deals
+  #
+  # type: bool
+  # env var: LOTUS_SEALING_MAKECCSECTORSAVAILABLE
+  #MakeCCSectorsAvailable = false
+
+  # Whether to use available miner balance for sector collateral instead of sending it with each message
+  #
+  # type: bool
+  # env var: LOTUS_SEALING_COLLATERALFROMMINERBALANCE
+  #CollateralFromMinerBalance = false
+
+  # Minimum available balance to keep in the miner actor before sending it with messages
+  #
+  # type: types.FIL
+  # env var: LOTUS_SEALING_AVAILABLEBALANCEBUFFER
+  #AvailableBalanceBuffer = "0 FIL"
+
+  # Don't send collateral with messages even if there is no available balance in the miner actor
+  #
+  # type: bool
+  # env var: LOTUS_SEALING_DISABLECOLLATERALFALLBACK
+  #DisableCollateralFallback = false
+
+  # maximum precommit batch size - batches will be sent immediately above this size
+  #
+  # type: int
+  # env var: LOTUS_SEALING_MAXPRECOMMITBATCH
+  #MaxPreCommitBatch = 256
+
+  # how long to wait before submitting a batch after crossing the minimum batch size
+  #
+  # type: Duration
+  # env var: LOTUS_SEALING_PRECOMMITBATCHWAIT
+  #PreCommitBatchWait = "24h0m0s"
+
+  # time buffer for forceful batch submission before sectors/deal in batch would start expiring
+  #
+  # type: Duration
+  # env var: LOTUS_SEALING_PRECOMMITBATCHSLACK
+  #PreCommitBatchSlack = "3h0m0s"
+
+  # minimum batched commit size - batches above this size will eventually be sent on a timeout
+  #
+  # type: int
+  # env var: LOTUS_SEALING_MINCOMMITBATCH
+  #MinCommitBatch = 4
+
+  # maximum batched commit size - batches will be sent immediately above this size
+  #
+  # type: int
+  # env var: LOTUS_SEALING_MAXCOMMITBATCH
+  #MaxCommitBatch = 819
+
+  # how long to wait before submitting a batch after crossing the minimum batch size
+  #
+  # type: Duration
+  # env var: LOTUS_SEALING_COMMITBATCHWAIT
+  #CommitBatchWait = "24h0m0s"
+
+  # time buffer for forceful batch submission before sectors/deals in batch would start expiring
+  #
+  # type: Duration
+  # env var: LOTUS_SEALING_COMMITBATCHSLACK
+  #CommitBatchSlack = "1h0m0s"
+
+  # When submitting several sector prove commit messages simultaneously, this option allows you to
+  # stagger the number of prove commits submitted per epoch
+  # This is done because gas estimates for ProveCommits are non deterministic and increasing as a large
+  # number of sectors get committed within the same epoch resulting in occasionally failed msgs.
+  # Submitting a smaller number of prove commits per epoch would reduce the possibility of failed msgs
+  #
+  # type: uint64
+  # env var: LOTUS_SEALING_MAXSECTORPROVECOMMITSSUBMITTEDPEREPOCH
+  #MaxSectorProveCommitsSubmittedPerEpoch = 20
+
+  # type: uint64
+  # env var: LOTUS_SEALING_TERMINATEBATCHMAX
+  #TerminateBatchMax = 100
+
+  # type: uint64
+  # env var: LOTUS_SEALING_TERMINATEBATCHMIN
+  #TerminateBatchMin = 1
+
+  # type: Duration
+  # env var: LOTUS_SEALING_TERMINATEBATCHWAIT
+  #TerminateBatchWait = "5m0s"
+
+  # UseSyntheticPoRep, when set to true, will reduce the amount of cache data held on disk after the completion of PreCommit 2 to 11GiB.
+  #
+  # type: bool
+  # env var: LOTUS_SEALING_USESYNTHETICPOREP
+  #UseSyntheticPoRep = false
+
+  # Whether to abort if any sector activation in a batch fails (newly sealed sectors, only with ProveCommitSectors3).
+  #
+  # type: bool
+  # env var: LOTUS_SEALING_REQUIREACTIVATIONSUCCESS
+  #RequireActivationSuccess = false
+
+  # Whether to abort if any piece activation notification returns a non-zero exit code (newly sealed sectors, only with ProveCommitSectors3).
+  #
+  # type: bool
+  # env var: LOTUS_SEALING_REQUIREACTIVATIONSUCCESSUPDATE
+  #RequireActivationSuccessUpdate = false
+
+  # Whether to abort if any sector activation in a batch fails (updating sectors, only with ProveReplicaUpdates3).
+  #
+  # type: bool
+  # env var: LOTUS_SEALING_REQUIRENOTIFICATIONSUCCESS
+  #RequireNotificationSuccess = false
+
+  # Whether to abort if any piece activation notification returns a non-zero exit code (updating sectors, only with ProveReplicaUpdates3).
+  #
+  # type: bool
+  # env var: LOTUS_SEALING_REQUIRENOTIFICATIONSUCCESSUPDATE
+  #RequireNotificationSuccessUpdate = false
+
+
+[Storage]
+  # type: int
+  # env var: LOTUS_STORAGE_PARALLELFETCHLIMIT
+  #ParallelFetchLimit = 10
+
+  # type: bool
+  # env var: LOTUS_STORAGE_ALLOWSECTORDOWNLOAD
+  #AllowSectorDownload = true
+
+  # type: bool
+  # env var: LOTUS_STORAGE_ALLOWADDPIECE
+  #AllowAddPiece = true
+
+  # type: bool
+  # env var: LOTUS_STORAGE_ALLOWPRECOMMIT1
+  #AllowPreCommit1 = true
+
+  # type: bool
+  # env var: LOTUS_STORAGE_ALLOWPRECOMMIT2
+  #AllowPreCommit2 = true
+
+  # type: bool
+  # env var: LOTUS_STORAGE_ALLOWCOMMIT
+  #AllowCommit = true
+
+  # type: bool
+  # env var: LOTUS_STORAGE_ALLOWUNSEAL
+  #AllowUnseal = true
+
+  # type: bool
+  # env var: LOTUS_STORAGE_ALLOWREPLICAUPDATE
+  #AllowReplicaUpdate = true
+
+  # type: bool
+  # env var: LOTUS_STORAGE_ALLOWPROVEREPLICAUPDATE2
+  #AllowProveReplicaUpdate2 = true
+
+  # type: bool
+  # env var: LOTUS_STORAGE_ALLOWREGENSECTORKEY
+  #AllowRegenSectorKey = true
+
+  # LocalWorkerName specifies a custom name for the builtin worker.
+  # If set to an empty string (default) os hostname will be used
+  #
+  # type: string
+  # env var: LOTUS_STORAGE_LOCALWORKERNAME
+  #LocalWorkerName = ""
+
+  # Assigner specifies the worker assigner to use when scheduling tasks.
+  # "utilization" (default) - assign tasks to workers with lowest utilization.
+  # "spread" - assign tasks to as many distinct workers as possible.
+  #
+  # type: string
+  # env var: LOTUS_STORAGE_ASSIGNER
+  #Assigner = "utilization"
+
+  # DisallowRemoteFinalize when set to true will force all Finalize tasks to
+  # run on workers with local access to both long-term storage and the sealing
+  # path containing the sector.
+  # --
+  # WARNING: Only set this if all workers have access to long-term storage
+  # paths. If this flag is enabled, and there are workers without long-term
+  # storage access, sectors will not be moved from them, and Finalize tasks
+  # will appear to be stuck.
+  # --
+  # If you see stuck Finalize tasks after enabling this setting, check
+  # 'lotus-miner sealing sched-diag' and 'lotus-miner storage find [sector num]'
+  #
+  # type: bool
+  # env var: LOTUS_STORAGE_DISALLOWREMOTEFINALIZE
+  #DisallowRemoteFinalize = false
+
+  # ResourceFiltering instructs the system which resource filtering strategy
+  # to use when evaluating tasks against this worker. An empty value defaults
+  # to "hardware".
+  #
+  # type: ResourceFilteringStrategy
+  # env var: LOTUS_STORAGE_RESOURCEFILTERING
+  #ResourceFiltering = "hardware"
+
+
+[Fees]
+  # type: types.FIL
+  # env var: LOTUS_FEES_MAXPRECOMMITGASFEE
+  #MaxPreCommitGasFee = "0.025 FIL"
+
+  # type: types.FIL
+  # env var: LOTUS_FEES_MAXCOMMITGASFEE
+  #MaxCommitGasFee = "0.05 FIL"
+
+  # type: types.FIL
+  # env var: LOTUS_FEES_MAXTERMINATEGASFEE
+  #MaxTerminateGasFee = "0.5 FIL"
+
+  # WindowPoSt is a high-value operation, so the default fee should be high.
+  #
+  # type: types.FIL
+  # env var: LOTUS_FEES_MAXWINDOWPOSTGASFEE
+  #MaxWindowPoStGasFee = "5 FIL"
+
+  # type: types.FIL
+  # env var: LOTUS_FEES_MAXPUBLISHDEALSFEE
+  #MaxPublishDealsFee = "0.05 FIL"
+
+  # type: types.FIL
+  # env var: LOTUS_FEES_MAXMARKETBALANCEADDFEE
+  #MaxMarketBalanceAddFee = "0.007 FIL"
+
+  # type: bool
+  # env var: LOTUS_FEES_MAXIMIZEWINDOWPOSTFEECAP
+  #MaximizeWindowPoStFeeCap = true
+
+  [Fees.MaxPreCommitBatchGasFee]
+    # type: types.FIL
+    # env var: LOTUS_FEES_MAXPRECOMMITBATCHGASFEE_BASE
+    #Base = "0 FIL"
+
+    # type: types.FIL
+    # env var: LOTUS_FEES_MAXPRECOMMITBATCHGASFEE_PERSECTOR
+    #PerSector = "0.02 FIL"
+
+  [Fees.MaxCommitBatchGasFee]
+    # type: types.FIL
+    # env var: LOTUS_FEES_MAXCOMMITBATCHGASFEE_BASE
+    #Base = "0 FIL"
+
+    # type: types.FIL
+    # env var: LOTUS_FEES_MAXCOMMITBATCHGASFEE_PERSECTOR
+    #PerSector = "0.03 FIL"
+
+
+[Addresses]
+  # Addresses to send PreCommit messages from
+  #
+  # type: []string
+  # env var: LOTUS_ADDRESSES_PRECOMMITCONTROL
+  #PreCommitControl = []
+
+  # Addresses to send Commit messages from
+  #
+  # type: []string
+  # env var: LOTUS_ADDRESSES_COMMITCONTROL
+  #CommitControl = []
+
+  # type: []string
+  # env var: LOTUS_ADDRESSES_TERMINATECONTROL
+  #TerminateControl = []
+
+  # type: []string
+  # env var: LOTUS_ADDRESSES_DEALPUBLISHCONTROL
+  #DealPublishControl = []
+
+  # DisableOwnerFallback disables usage of the owner address for messages
+  # sent automatically
+  #
+  # type: bool
+  # env var: LOTUS_ADDRESSES_DISABLEOWNERFALLBACK
+  #DisableOwnerFallback = false
+
+  # DisableWorkerFallback disables usage of the worker address for messages
+  # sent automatically, if control addresses are configured.
+  # A control address that doesn't have enough funds will still be chosen
+  # over the worker address if this flag is set.
+  #
+  # type: bool
+  # env var: LOTUS_ADDRESSES_DISABLEWORKERFALLBACK
+  #DisableWorkerFallback = false
+
+
+[HarmonyDB]
+  # HOSTS is a list of hostnames to nodes running YugabyteDB
+  # in a cluster. Only 1 is required
+  #
+  # type: []string
+  # env var: LOTUS_HARMONYDB_HOSTS
+  #Hosts = ["127.0.0.1"]
+
+  # The Yugabyte server's username with full credentials to operate on Lotus' Database. Blank for default.
+  #
+  # type: string
+  # env var: LOTUS_HARMONYDB_USERNAME
+  #Username = "yugabyte"
+
+  # The password for the related username. Blank for default.
+  #
+  # type: string
+  # env var: LOTUS_HARMONYDB_PASSWORD
+  #Password = "yugabyte"
+
+  # The database (logical partition) within Yugabyte. Blank for default.
+  #
+  # type: string
+  # env var: LOTUS_HARMONYDB_DATABASE
+  #Database = "yugabyte"
+
+  # The port to find Yugabyte. Blank for default.
+  #
+  # type: string
+  # env var: LOTUS_HARMONYDB_PORT
+  #Port = "5433"
+

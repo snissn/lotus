@@ -1,0 +1,65 @@
+linters:
+  disable-all: true
+  enable:
+    - gofmt
+    - govet
+    - goimports
+    - misspell
+    - revive
+    - errcheck
+    - gosec
+    - unconvert
+    - staticcheck
+    - unused
+
+# We don't want to skip builtin/
+skip-dirs-use-default: false
+skip-dirs:
+  - vendor$
+  - testdata$
+  - examples$
+
+issues:
+  exclude:
+    # gosec
+    - "^G101: Potential hardcoded credentials"
+    - "^G108: Profiling endpoint is automatically exposed on /debug/pprof"
+    - "^G115: integer overflow conversion u?int(8|32|64)? -> u?int(8|32|64)?"
+    - "^G204: Subprocess launched with (variable|a potential tainted input or cmd arguments)"
+    - "^G301: Expect directory permissions to be 0750 or less"
+    - "^G302: Expect file permissions to be 0600 or less"
+    - "^G304: Potential file inclusion via variable"
+    - "^G306: Expect WriteFile permissions to be 0600 or less"
+    - "^G404: Use of weak random number generator"
+    # staticcheck
+    - "^SA1019: xerrors.* is deprecated: As of Go 1.13, use errors"
+    # revive
+    - "^blank-imports: a blank import should be only in a main or test package, or have a comment justifying it"
+    - "^dot-imports: should not use dot imports"
+    - "^exported: (func|type) name will be used as [^\\s]+ by other packages, and that stutters; consider calling this \\w+"
+    - "^exported: comment on exported (const|var) [^\\s]+ should be of the form \"\\w+ ...\""
+    - "^exported: exported (const|function|method|type|var) [^\\s]+ should have comment (\\(or a comment on this block\\) )?or be unexported"
+    - "^indent-error-flow: if block ends with a return statement, so drop this else and outdent its block \\(move short variable declaration to its own line if necessary\\)"
+    - "^package-comments: package comment should be of the form \"Package \\w+ ...\""
+    - "^package-comments: should have a package comment"
+    - "^unexported-return: exported func \\w+ returns unexported type [^\\s]+, which can be annoying to use"
+    - "^unused-parameter: parameter '\\w+' seems to be unused, consider removing or renaming it as _"
+    - "^var-naming: (const|func|type|var|struct field|(method|func|interface method) parameter) [A-Z]\\w+ should be"
+    - "^var-naming: (method|range var) \\w*(Api|Http|Id|Rpc|Url)[^\\s]* should be \\w*(API|HTTP|ID|RPC|URL)"
+    - "^var-naming: don't use underscores in Go names"
+    - "^var-naming: don't use ALL_CAPS in Go names; use CamelCase"
+    - "^redefines-builtin-id: redefinition of the built-in (function|type) (max|min|cap|recover|new|error)"
+
+  exclude-use-default: false
+  exclude-rules:
+    - path: .*_test.go
+      linters:
+        - gosec
+
+    - path: chain/vectors/gen/.*
+      linters:
+        - gosec
+
+    - path: cmd/lotus-bench/.*
+      linters:
+        - gosec
