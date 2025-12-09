@@ -234,6 +234,15 @@ func (e *ethGas) EthEstimateGas(ctx context.Context, p jsonrpc.RawParams) (ethty
 		return 0, xerrors.Errorf("gas search failed: %w", err)
 	}
 
+	// 7702: add intrinsic overhead for authorization tuples only for the
+	// EthAccount.ApplyAndCall route.
+	if ethtypes.Eip7702FeatureEnabled && gassedMsg.Method == abi.MethodNum(ethtypes.MethodHash("ApplyAndCall")) {
+		authCount := countAuthInApplyAndCallParams(gassedMsg.Params)
+		if authCount > 0 {
+			expectedGas += compute7702IntrinsicOverhead(authCount)
+		}
+	}
+
 	return ethtypes.EthUint64(expectedGas), nil
 }
 
@@ -289,16 +298,7 @@ func (e *ethGas) applyMessage(ctx context.Context, msg *types.Message, tsk types
 	}
 
 	if res.MsgRct.ExitCode.IsError() {
-		reason := "none"
-		var cbytes abi.CborBytes
-		if err := cbytes.UnmarshalCBOR(bytes.NewReader(res.MsgRct.Return)); err != nil {
-			log.Warnw("failed to unmarshal cbor bytes from message receipt return", "error", err)
-			reason = "ERROR: revert reason is not cbor encoded bytes"
-		} // else leave as empty bytes
-		if len(cbytes) > 0 {
-			reason = parseEthRevert(cbytes)
-		}
-		return nil, api.NewErrExecutionReverted(res.MsgRct.ExitCode, reason, res.Error, cbytes)
+		return nil, api.NewErrExecutionRevertedFromResult(res)
 	}
 
 	return res, nil
@@ -337,7 +337,7 @@ func ethGasSearch(
 		return ret, nil
 	}
 
-	return -1, xerrors.Errorf("message execution failed: exit %s, reason: %s", res.MsgRct.ExitCode, res.Error)
+	return -1, api.NewErrExecutionRevertedFromResult(res)
 }
 
 func traceContainsExitCode(et types.ExecutionTrace, ex exitcode.ExitCode) bool {

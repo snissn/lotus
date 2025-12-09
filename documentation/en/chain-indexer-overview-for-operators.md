@@ -310,7 +310,7 @@ In case you need to downgrade to the [previous indexing system](#previous-indexi
 * It persists state to `${LOTUS_PATH}/chainindex`.
 * It has this CLI backfill tooling: [`lotus index validate-backfill`](#lotus-shed-chainindex-validate-backfill-cli-tool)
 * **Storage requirements:** See the [backfill disk space requirements](#backfill-disk-space-requirements).
-* **Backfil times:** See the [backfill timing](#backfill-timing).
+* **Backfill times:** See the [backfill timing](#backfill-timing).
 
 ## Appendix
 
@@ -328,7 +328,7 @@ Note that this lack of an automated migration is primarily a concern for the rel
 
 ### `ChainValidateIndex` RPC API
 
-Please refer to the [Lotus API documentation](https://github.com/filecoin-project/lotus/blob/master/documentation/en/api-v1-unstable-methods.md) for detailed documentation of the `ChainValidateIndex` JSON RPC API.
+Please refer to the [Lotus API documentation](https://github.com/filecoin-project/lotus/blob/master/documentation/en/api-methods-v1-stable.md) for detailed documentation of the `ChainValidateIndex` JSON RPC API.
 
 The `ChainValidateIndex` JSON RPC API serves a dual purpose: it validates/diagnoses the integrity of the index at a specific epoch (i.e., it ensures consistency between indexed data and actual chain state), while also providing the option to backfill the `ChainIndexer` if it does not have data for the specified epoch. 
 
